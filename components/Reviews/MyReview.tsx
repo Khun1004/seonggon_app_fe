@@ -236,13 +236,14 @@ const styles = StyleSheet.create({
   commentBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     alignSelf: "flex-start",
     gap: 5,
+    height: 30,
     backgroundColor: Palette.amberSoft,
     paddingHorizontal: 10,
-    paddingVertical: 6,
     borderRadius: Radius.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md + 4,
   },
   commentBtnText: {
     fontSize: 11,

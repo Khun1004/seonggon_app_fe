@@ -1,11 +1,15 @@
 // app/admin/(tabs)/info.tsx
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,15 +26,23 @@ import {
   deleteAdminStoreInfo,
   getAdminStoreInfo,
   updateAdminStoreInfo,
+  uploadAdminStoreInfoPhoto,
   UpsertStoreInfoPayload,
 } from "@/constants/adminStoreInfoApi";
-import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
+import {
+  AdminPalette as Palette,
+  Radius,
+  Shadow,
+  Spacing,
+} from "@/constants/adminTheme";
+import { resolvePhotoUrl } from "@/constants/api";
 
 const GROUPS: { key: string; label: string }[] = [
   { key: "intro", label: "소개" },
   { key: "taste", label: "성공식당의 맛" },
   { key: "seats", label: "좌석 및 공간 (1층·2층 안내)" },
   { key: "directions", label: "오시는 길 및 주차" },
+  { key: "before_visit", label: "방문 전 알아두세요 (홈 화면)" },
 ];
 
 const EMPTY_DRAFT: UpsertStoreInfoPayload = {
@@ -38,6 +50,7 @@ const EMPTY_DRAFT: UpsertStoreInfoPayload = {
   title: "",
   content: "",
   icon: "",
+  imageUrl: undefined,
   displayOrder: 0,
   active: true,
 };
@@ -50,6 +63,7 @@ export default function AdminInfo() {
   const [isNew, setIsNew] = useState(false);
   const [draft, setDraft] = useState<UpsertStoreInfoPayload>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const load = useCallback(() => {
     if (!adminPassword) return;
@@ -74,6 +88,7 @@ export default function AdminInfo() {
       title: section.title,
       content: section.content,
       icon: section.icon,
+      imageUrl: section.imageUrl,
       displayOrder: section.displayOrder,
       active: section.active,
     });
@@ -84,6 +99,34 @@ export default function AdminInfo() {
     setIsNew(true);
     const count = sections.filter((s) => s.group === groupKey).length;
     setDraft({ ...EMPTY_DRAFT, group: groupKey, displayOrder: count + 1 });
+  };
+
+  const handlePickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("알림", "사진 접근 권한이 필요해요.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    if (!adminPassword) return;
+
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadAdminStoreInfoPhoto(
+        `data:image/jpeg;base64,${result.assets[0].base64}`,
+        adminPassword,
+      );
+      setDraft((prev) => ({ ...prev, imageUrl: url }));
+    } catch (e: any) {
+      Alert.alert("알림", e.message || "사진 업로드에 실패했습니다.");
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const closeModal = () => {
@@ -214,7 +257,10 @@ export default function AdminInfo() {
         animationType="slide"
         onRequestClose={closeModal}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalCard}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeaderRow}>
@@ -225,6 +271,32 @@ export default function AdminInfo() {
                   <Ionicons name="close" size={22} color={Palette.inkFaint} />
                 </TouchableOpacity>
               </View>
+
+              <TouchableOpacity
+                style={styles.photoPicker}
+                onPress={handlePickPhoto}
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto ? (
+                  <ActivityIndicator color={Palette.amberDeep} />
+                ) : draft.imageUrl && resolvePhotoUrl(draft.imageUrl) ? (
+                  <Image
+                    source={{ uri: resolvePhotoUrl(draft.imageUrl)! }}
+                    style={styles.photoPickerImage}
+                  />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="camera-outline"
+                      size={22}
+                      color={Palette.amberDeep}
+                    />
+                    <Text style={styles.photoPickerText}>
+                      사진 선택 (선택사항)
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
               <Text style={styles.fieldLabel}>분류</Text>
               <View style={styles.groupPickRow}>
@@ -300,7 +372,7 @@ export default function AdminInfo() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -391,6 +463,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   modalTitle: { fontSize: 16, fontWeight: "800", color: Palette.ink },
+  photoPicker: {
+    height: 120,
+    borderRadius: Radius.lg,
+    backgroundColor: Palette.creamDim,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+    overflow: "hidden",
+  },
+  photoPickerImage: { width: "100%", height: "100%" },
+  photoPickerText: { fontSize: 12, color: Palette.amberDeep, marginTop: 4 },
   fieldLabel: {
     fontSize: 12,
     fontWeight: "700",

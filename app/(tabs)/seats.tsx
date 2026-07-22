@@ -17,7 +17,11 @@ import {
   getGroupCapacityRange,
   RoomsContext,
 } from "@/components/contexts/RoomsContext";
-import { getStoreInfo, StoreInfoSection } from "@/constants/api";
+import {
+  getStoreInfo,
+  resolvePhotoUrl,
+  StoreInfoSection,
+} from "@/constants/api";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const TAB_OPTIONS = ["1층 자리", "2층 자리", "주차"] as const;
@@ -141,6 +145,10 @@ export default function Seats() {
       count: items.length,
       seatNumbers: items.map((r) => r.number),
       capacity: getGroupCapacityRange(items) || "-",
+      // 관리자가 좌석 수정 화면에서 입력한 "비고"를 그대로 씁니다 —
+      // 같은 카테고리 안에 비고가 있는 좌석이 있으면 그걸 대표로 보여줘요.
+      note: items.find((r) => r.note)?.note,
+      isRoom: items[0]?.isRoom ?? true,
     };
   };
 
@@ -164,7 +172,8 @@ export default function Seats() {
               count={byCategory("hall").count}
               capacity={`${byCategory("hall").capacity} (테이블당 다름)`}
               icon="restaurant-outline"
-              isRoom={false}
+              isRoom={byCategory("hall").isRoom}
+              note={byCategory("hall").note}
               seatNumbers={byCategory("hall").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=hall" as any)
@@ -175,7 +184,10 @@ export default function Seats() {
               count={byCategory("small").count}
               capacity={byCategory("small").capacity}
               icon="home-outline"
-              note="신발을 벗고 들어가는 룸입니다."
+              isRoom={byCategory("small").isRoom}
+              note={
+                byCategory("small").note ?? "신발을 벗고 들어가는 룸입니다."
+              }
               seatNumbers={byCategory("small").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=small" as any)
@@ -186,7 +198,10 @@ export default function Seats() {
               count={byCategory("medium").count}
               capacity={byCategory("medium").capacity}
               icon="home-outline"
-              note="신발을 벗고 들어가는 룸입니다."
+              isRoom={byCategory("medium").isRoom}
+              note={
+                byCategory("medium").note ?? "신발을 벗고 들어가는 룸입니다."
+              }
               seatNumbers={byCategory("medium").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=medium" as any)
@@ -197,7 +212,11 @@ export default function Seats() {
               count={byCategory("large").count}
               capacity={byCategory("large").capacity}
               icon="home-outline"
-              note="대형 룸은 신발을 신고 편하게 이용하실 수 있습니다. 예약 상황에 따라 7번 · 8번 · 9번 룸이 함께 배정될 수 있습니다."
+              isRoom={byCategory("large").isRoom}
+              note={
+                byCategory("large").note ??
+                "대형 룸은 신발을 신고 편하게 이용하실 수 있습니다. 예약 상황에 따라 7번 · 8번 · 9번 룸이 함께 배정될 수 있습니다."
+              }
               seatNumbers={byCategory("large").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=large" as any)
@@ -239,7 +258,11 @@ export default function Seats() {
               count={byCategory("group_room").count}
               capacity={byCategory("group_room").capacity}
               icon="home-outline"
-              note="회식 및 소모임에 알맞은 룸입니다."
+              isRoom={byCategory("group_room").isRoom}
+              note={
+                byCategory("group_room").note ??
+                "회식 및 소모임에 알맞은 룸입니다."
+              }
               seatNumbers={byCategory("group_room").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=group_room" as any)
@@ -250,7 +273,11 @@ export default function Seats() {
               count={byCategory("group_large").count}
               capacity={byCategory("group_large").capacity}
               icon="home-outline"
-              note="단체 회식, 모임에 적합한 넓은 룸입니다."
+              isRoom={byCategory("group_large").isRoom}
+              note={
+                byCategory("group_large").note ??
+                "단체 회식, 모임에 적합한 넓은 룸입니다."
+              }
               seatNumbers={byCategory("group_large").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=group_large" as any)
@@ -261,8 +288,11 @@ export default function Seats() {
               count={byCategory("group_hall").count}
               capacity={`${byCategory("group_hall").capacity} (전체 대관 가능)`}
               icon="restaurant-outline"
-              isRoom={false}
-              note="기업 회식, 대가족 모임 등 단체 예약시 홀 전체를 사용하실 수 있습니다."
+              isRoom={byCategory("group_hall").isRoom}
+              note={
+                byCategory("group_hall").note ??
+                "기업 회식, 대가족 모임 등 단체 예약시 홀 전체를 사용하실 수 있습니다."
+              }
               seatNumbers={byCategory("group_hall").seatNumbers}
               onDetailPress={() =>
                 router.push("/room-detail?category=group_hall" as any)
@@ -287,7 +317,17 @@ export default function Seats() {
             </View>
 
             <Image
-              source={require("@/assets/seat_images/CarParking.jpg")}
+              source={
+                resolvePhotoUrl(
+                  directionsInfo.find((s) => s.imageUrl)?.imageUrl,
+                )
+                  ? {
+                      uri: resolvePhotoUrl(
+                        directionsInfo.find((s) => s.imageUrl)?.imageUrl,
+                      )!,
+                    }
+                  : require("@/assets/seat_images/CarParking.jpg")
+              }
               style={styles.parkingImage}
               resizeMode="cover"
             />

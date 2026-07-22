@@ -5,7 +5,10 @@ import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,10 +21,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AdminContext } from "@/components/contexts/AdminContext";
 import {
   AdminReview,
+  generateAiReply,
   getAdminReviews,
   setReviewOwnerReply,
 } from "@/constants/adminApi";
-import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
+import {
+  AdminPalette as Palette,
+  Radius,
+  Shadow,
+  Spacing,
+} from "@/constants/adminTheme";
+import { resolvePhotoUrl } from "@/constants/api";
 
 function StarRow({ rating }: { rating: number }) {
   const stars = [];
@@ -46,6 +56,7 @@ export default function AdminReviews() {
   const [editing, setEditing] = useState<AdminReview | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(() => {
     if (!adminPassword) return;
@@ -65,6 +76,19 @@ export default function AdminReviews() {
   const openEditor = (review: AdminReview) => {
     setEditing(review);
     setReplyDraft(review.ownerReply ?? "");
+  };
+
+  const handleGenerateAi = async () => {
+    if (!editing || !adminPassword) return;
+    setGenerating(true);
+    try {
+      const suggested = await generateAiReply(editing.id, adminPassword);
+      setReplyDraft(suggested);
+    } catch (e: any) {
+      Alert.alert("알림", e.message || "AI 답변 생성에 실패했습니다.");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleSaveReply = async () => {
@@ -131,6 +155,26 @@ export default function AdminReviews() {
                 <Text style={styles.reviewText} numberOfLines={2}>
                   {rev.text}
                 </Text>
+                {rev.photos && rev.photos.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.photoRow}
+                    contentContainerStyle={{ gap: 6 }}
+                  >
+                    {rev.photos.map((photo, idx) => {
+                      const uri = resolvePhotoUrl(photo);
+                      if (!uri) return null;
+                      return (
+                        <Image
+                          key={idx}
+                          source={{ uri }}
+                          style={styles.photoThumb}
+                        />
+                      );
+                    })}
+                  </ScrollView>
+                )}
                 <View style={styles.replyPreview}>
                   <Ionicons
                     name="chatbubble-outline"
@@ -167,7 +211,10 @@ export default function AdminReviews() {
         animationType="slide"
         onRequestClose={() => setEditing(null)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalCard}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>답변 작성</Text>
@@ -180,6 +227,26 @@ export default function AdminReviews() {
                 “{editing.text}”
               </Text>
             )}
+
+            <TouchableOpacity
+              style={[styles.aiBtn, generating && { opacity: 0.6 }]}
+              onPress={handleGenerateAi}
+              disabled={generating}
+            >
+              {generating ? (
+                <ActivityIndicator color={Palette.amberDeep} size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="sparkles-outline"
+                    size={15}
+                    color={Palette.amberDeep}
+                  />
+                  <Text style={styles.aiBtnText}>AI로 답변 초안 만들기</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             <TextInput
               style={styles.replyInput}
               placeholder="손님께 남길 답변을 입력해 주세요."
@@ -201,7 +268,7 @@ export default function AdminReviews() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -259,6 +326,13 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: Spacing.sm,
   },
+  photoRow: { marginBottom: Spacing.sm },
+  photoThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.sm,
+    backgroundColor: Palette.creamDim,
+  },
   replyPreview: {
     flexDirection: "row",
     alignItems: "center",
@@ -295,6 +369,17 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginBottom: Spacing.md,
   },
+  aiBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: Palette.amberSoft,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm + 4,
+    marginBottom: Spacing.sm + 4,
+  },
+  aiBtnText: { fontSize: 13, fontWeight: "700", color: Palette.amberDeep },
   replyInput: {
     backgroundColor: Palette.creamDim,
     borderRadius: Radius.md,

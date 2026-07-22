@@ -1,7 +1,9 @@
 // components/Drinks/Drinks.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useContext, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -10,83 +12,35 @@ import {
   View,
 } from "react-native";
 
+import { MenuContext } from "@/components/contexts/MenuContext";
+import { MenuItem, resolveImageSource } from "@/constants/menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
-
-type DrinkItem = {
-  id: string;
-  name: string;
-  price: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  image?: any; // require()된 로컬 이미지
-};
-
-const DRINKS_DATA: Record<string, DrinkItem[]> = {
-  음료: [
-    { id: "d1", name: "Tams (탐스)", price: "2,000원", icon: "wine-outline" },
-    { id: "d2", name: "Pepsi Cola", price: "2,000원", icon: "wine-outline" },
-    {
-      id: "d3",
-      name: "Pepsi Cola Zero",
-      price: "2,000원",
-      icon: "wine-outline",
-    },
-    {
-      id: "d4",
-      name: "Chilsung Cider",
-      price: "2,000원",
-      icon: "wine-outline",
-    },
-    {
-      id: "d5",
-      name: "Chilsung Cider Zero",
-      price: "2,000원",
-      icon: "wine-outline",
-    },
-  ],
-  주류: [
-    {
-      id: "a1",
-      name: "참이슬 (Chamisul)",
-      price: "5,000원",
-      icon: "beer-outline",
-    },
-    { id: "a2", name: "참 (Cham)", price: "5,000원", icon: "beer-outline" },
-    { id: "a3", name: "제로 (Zero)", price: "5,000원", icon: "beer-outline" },
-    { id: "a4", name: "Cass (카스)", price: "5,000원", icon: "beer-outline" },
-    { id: "a5", name: "Cass Zero", price: "5,000원", icon: "beer-outline" },
-    {
-      id: "a6",
-      name: "복분자 (Bokbunjaju)",
-      price: "5,000원",
-      icon: "wine-outline",
-    },
-    {
-      id: "a7",
-      name: "동동주 (Dongdongju)",
-      price: "5,000원",
-      image: require("../../assets/images/찹쌀동동주.jpeg"),
-    },
-    {
-      id: "a8",
-      name: "막걸리 (Makgeolli)",
-      price: "5,000원",
-      icon: "beer-outline",
-    },
-  ],
-};
 
 export default function Drinks() {
   const [activeTab, setActiveTab] = useState<"음료" | "주류">("음료");
+  const { menuData, loading, refreshMenu } = useContext(MenuContext);
 
-  const DrinkRow = ({ item }: { item: DrinkItem }) => (
+  // 이 화면에 들어올 때마다 새로 불러와요 — 관리자가 방금 음료/주류를
+  // 추가하거나 수정했어도 앱을 껐다 켜지 않고 바로 반영돼요.
+  useFocusEffect(
+    useCallback(() => {
+      refreshMenu();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  const DrinkRow = ({ item }: { item: MenuItem }) => (
     <View style={styles.drinkItem}>
       <View style={styles.imageContainer}>
         {item.image ? (
-          <Image source={item.image} style={styles.drinkImage} />
+          <Image
+            source={resolveImageSource(item.image)}
+            style={styles.drinkImage}
+          />
         ) : (
           <View style={styles.placeholderIcon}>
             <Ionicons
-              name={item.icon ?? "beaker-outline"}
+              name={activeTab === "음료" ? "wine-outline" : "beer-outline"}
               size={22}
               color={Palette.amberDeep}
             />
@@ -125,21 +79,40 @@ export default function Drinks() {
         ))}
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {DRINKS_DATA[activeTab].map((item) => (
-          <DrinkRow key={item.id} item={item} />
-        ))}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={Palette.amberDeep} />
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {(menuData[activeTab] ?? []).length === 0 ? (
+            <Text style={styles.emptyText}>
+              아직 등록된 {activeTab}가 없습니다.
+            </Text>
+          ) : (
+            (menuData[activeTab] ?? []).map((item) => (
+              <DrinkRow key={item.id} item={item} />
+            ))
+          )}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.cream },
+  loadingBox: { flex: 1, justifyContent: "center", alignItems: "center" },
+  emptyText: {
+    textAlign: "center",
+    fontSize: 13,
+    color: Palette.inkFaint,
+    marginTop: Spacing.xl,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",

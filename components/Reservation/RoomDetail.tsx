@@ -15,11 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import {
-  getGroupCapacityRange,
-  RoomCategory,
-  RoomsContext,
-} from "@/components/contexts/RoomsContext";
+import { RoomCategory, RoomsContext } from "@/components/contexts/RoomsContext";
 import { CLOSING_TIME, RESERVATION_TIME_SLOTS } from "@/constants/rooms-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
@@ -126,7 +122,7 @@ export default function RoomDetail() {
           <View style={styles.specRow}>
             <Ionicons name="people-outline" size={15} color={Palette.inkSoft} />
             <Text style={styles.specText}>
-              권장 인원 {getGroupCapacityRange(group.rooms)}
+              권장 인원 {selectedRoom.capacity}
             </Text>
           </View>
           <View style={styles.specRow}>

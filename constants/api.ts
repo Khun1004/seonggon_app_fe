@@ -5,7 +5,7 @@
 // 접속되는 실제 서버 주소(예: "https://seonggong-api.up.railway.app")로 바꿔야 해요.
 // 로컬 IP(192.168.x.x)는 같은 와이파이에 있는 사람에게만 보이기 때문에,
 // 그 상태로 APK를 만들면 다른 사람 휴대폰에서는 로그인/예약이 전부 실패해요.
-export const BASE_URL = "http://192.168.1.101:8080";
+export const BASE_URL = "http://192.168.1.100:8080";
 
 // 리뷰 사진 등 서버에 저장된 URL을 화면에 보여줄 때 항상 이 함수를 거쳐주세요.
 // 예전 버그로 인해 DB에 휴대폰 로컬 경로(file://, ph://, content:// 등)가 남아있는
@@ -546,6 +546,7 @@ export type StoreInfoSection = {
   title: string;
   content: string;
   icon?: string;
+  imageUrl?: string;
   displayOrder: number;
   active: boolean;
 };
@@ -554,4 +555,30 @@ export async function getStoreInfo(): Promise<StoreInfoSection[]> {
   const res = await fetch(`${BASE_URL}/api/store-info`);
   if (!res.ok) throw new Error("안내 문구를 불러오지 못했습니다.");
   return (await res.json()) as StoreInfoSection[];
+}
+
+// ── 메뉴 ────────────────────────────────────────────────────
+export type BackendMenuIngredient = {
+  name: string;
+  imageUrl?: string;
+};
+
+export type BackendMenuItem = {
+  id: number;
+  category: string;
+  name: string;
+  description: string;
+  price: string;
+  priceVal: number;
+  isHot: boolean;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+  ingredients: BackendMenuIngredient[];
+};
+
+export async function getMenuItems(): Promise<BackendMenuItem[]> {
+  const res = await fetch(`${BASE_URL}/api/menu`);
+  if (!res.ok) throw new Error("메뉴를 불러오지 못했습니다.");
+  return (await res.json()) as BackendMenuItem[];
 }

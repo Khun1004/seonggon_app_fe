@@ -1,8 +1,10 @@
 // components/Menu/Menu.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useContext, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ScrollView,
@@ -13,12 +15,8 @@ import {
 } from "react-native";
 
 import { CartContext } from "@/components/contexts/CartContext";
-import {
-  EXTRA_MENU,
-  MENU_DATA,
-  MenuItem,
-  resolveImageSource,
-} from "@/constants/menu-data";
+import { MenuContext } from "@/components/contexts/MenuContext";
+import { MenuItem, resolveImageSource } from "@/constants/menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const TABS = ["백숙", "고기", "사이드", "추가 메뉴"];
@@ -26,7 +24,15 @@ const TABS = ["백숙", "고기", "사이드", "추가 메뉴"];
 export default function Menu() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("백숙");
-  const { addToCart } = React.useContext(CartContext);
+  const { addToCart } = useContext(CartContext);
+  const { menuData, extraMenu, loading, refreshMenu } = useContext(MenuContext);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshMenu();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const handleQuickAdd = (item: MenuItem) => {
     addToCart({
@@ -45,9 +51,17 @@ export default function Menu() {
   };
 
   const isExtraTab = activeTab === "추가 메뉴";
-  const items = !isExtraTab ? MENU_DATA[activeTab] : [];
+  const items = !isExtraTab ? (menuData[activeTab] ?? []) : [];
   const featured = items.filter((item) => item.isHot);
   const standard = items.filter((item) => !item.isHot);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingBox]}>
+        <ActivityIndicator color={Palette.amberDeep} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -91,12 +105,12 @@ export default function Menu() {
             </View>
 
             <View style={styles.extraList}>
-              {EXTRA_MENU.map((extra, idx) => (
+              {extraMenu.map((extra, idx) => (
                 <View
                   key={extra.id}
                   style={[
                     styles.extraRow,
-                    idx === EXTRA_MENU.length - 1 && { borderBottomWidth: 0 },
+                    idx === extraMenu.length - 1 && { borderBottomWidth: 0 },
                   ]}
                 >
                   <View style={{ flex: 1 }}>
@@ -176,6 +190,7 @@ export default function Menu() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.cream },
+  loadingBox: { justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     alignItems: "center",

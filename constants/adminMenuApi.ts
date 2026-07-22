@@ -1,6 +1,11 @@
 // constants/adminMenuApi.ts
 import { BASE_URL } from "@/constants/api";
 
+export type AdminMenuIngredient = {
+  name: string;
+  imageUrl?: string;
+};
+
 export type AdminMenuItem = {
   id: number;
   category: string;
@@ -12,6 +17,7 @@ export type AdminMenuItem = {
   imageUrl?: string;
   displayOrder: number;
   active: boolean;
+  ingredients: AdminMenuIngredient[];
 };
 
 export type UpsertMenuItemPayload = {
@@ -24,6 +30,7 @@ export type UpsertMenuItemPayload = {
   imageUrl?: string;
   displayOrder: number;
   active: boolean;
+  ingredients?: AdminMenuIngredient[];
 };
 
 export async function getAdminMenus(
@@ -79,6 +86,17 @@ export async function hideAdminMenu(
     headers: { "X-Admin-Password": adminPassword },
   });
   if (!res.ok) throw new Error("메뉴 숨기기에 실패했습니다.");
+}
+
+export async function deleteAdminMenu(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/menu/${id}/permanent`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("메뉴 삭제에 실패했습니다.");
 }
 
 export async function restoreAdminMenu(

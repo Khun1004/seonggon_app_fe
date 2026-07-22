@@ -1,8 +1,10 @@
 // components/Menu/MenuDetail.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useContext, useState } from "react";
+import React, { useCallback, useContext, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   ScrollView,
@@ -15,11 +17,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CartContext } from "@/components/contexts/CartContext";
-import {
-  EXTRA_MENU,
-  findMenuItemById,
-  resolveImageSource,
-} from "@/constants/menu-data";
+import { MenuContext } from "@/components/contexts/MenuContext";
+import { resolveImageSource } from "@/constants/menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const { width } = Dimensions.get("window");
@@ -27,10 +26,27 @@ const { width } = Dimensions.get("window");
 export default function MenuDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { findMenuItemById, extraMenu, loading, refreshMenu } =
+    useContext(MenuContext);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshMenu();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
   const item = findMenuItemById(id);
   const { addToCart, cartItems } = useContext(CartContext);
   const [quantity, setQuantity] = useState(1);
   const [infoTab, setInfoTab] = useState<"info" | "ingredients">("info");
+
+  if (loading) {
+    return (
+      <View style={styles.notFound}>
+        <ActivityIndicator color={Palette.amberDeep} />
+      </View>
+    );
+  }
 
   if (!item) {
     return (
@@ -225,12 +241,12 @@ export default function MenuDetail() {
             </View>
 
             <View style={styles.extraList}>
-              {EXTRA_MENU.map((extra, idx) => (
+              {extraMenu.map((extra, idx) => (
                 <View
                   key={extra.id}
                   style={[
                     styles.extraRow,
-                    idx === EXTRA_MENU.length - 1 && { borderBottomWidth: 0 },
+                    idx === extraMenu.length - 1 && { borderBottomWidth: 0 },
                   ]}
                 >
                   <View style={{ flex: 1 }}>

@@ -16,7 +16,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AdminContext } from "@/components/contexts/AdminContext";
-import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
+import {
+  AdminPalette as Palette,
+  Radius,
+  Shadow,
+  Spacing,
+} from "@/constants/adminTheme";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -37,8 +42,8 @@ export default function AdminLogin() {
       } else {
         Alert.alert("알림", "비밀번호가 올바르지 않습니다.");
       }
-    } catch {
-      Alert.alert("알림", "로그인 중 문제가 발생했습니다.");
+    } catch (e: any) {
+      Alert.alert("알림", `로그인 중 문제가 발생했습니다.\n${e?.message ?? e}`);
     } finally {
       setSubmitting(false);
     }

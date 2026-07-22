@@ -19,8 +19,13 @@ import {
   cancelReservationAsAdmin,
   getAdminReservations,
 } from "@/constants/adminApi";
+import {
+  AdminPalette as Palette,
+  Radius,
+  Shadow,
+  Spacing,
+} from "@/constants/adminTheme";
 import { getReservationMenuName } from "@/constants/reservation-menu-data";
-import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 function todayStr() {
   const d = new Date();

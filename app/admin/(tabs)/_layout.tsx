@@ -14,7 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { Palette } from "@/constants/theme";
+import { AdminPalette as Palette } from "@/constants/adminTheme";
 
 function TabBarBackground() {
   return (
@@ -170,6 +170,24 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="revenue"
+        options={{
+          title: "매출",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              focused={focused}
+              renderActive={(color) => (
+                <RenderIonicon name="stats-chart" color={color} />
+              )}
+              renderInactive={(color) => (
+                <RenderIonicon name="stats-chart-outline" color={color} />
+              )}
+              label="매출"
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="info"
         options={{
           title: "정보",
@@ -205,20 +223,23 @@ export default function AdminTabsLayout() {
           ),
         }}
       />
+      {/* 메뉴 화면은 이제 app/admin/menu.tsx(탭 그룹 밖)로 옮겨서, 로그인
+          화면처럼 하단 탭바 없이 자체 헤더 + 뒤로가기만 있는 화면이에요.
+          그래서 여기 탭 그룹에는 더 이상 등록하지 않습니다. */}
       <Tabs.Screen
-        name="menu"
+        name="mypage"
         options={{
-          title: "메뉴",
+          title: "마이",
           tabBarIcon: ({ focused }) => (
             <TabIcon
               focused={focused}
               renderActive={(color) => (
-                <RenderIonicon name="restaurant" color={color} />
+                <RenderIonicon name="person" color={color} />
               )}
               renderInactive={(color) => (
-                <RenderIonicon name="restaurant-outline" color={color} />
+                <RenderIonicon name="person-outline" color={color} />
               )}
-              label="메뉴"
+              label="마이"
             />
           ),
         }}

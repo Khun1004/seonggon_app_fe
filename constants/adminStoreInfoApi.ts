@@ -7,6 +7,7 @@ export type AdminStoreInfoSection = {
   title: string;
   content: string;
   icon?: string;
+  imageUrl?: string;
   displayOrder: number;
   active: boolean;
 };
@@ -16,6 +17,7 @@ export type UpsertStoreInfoPayload = {
   title: string;
   content: string;
   icon?: string;
+  imageUrl?: string;
   displayOrder: number;
   active: boolean;
 };
@@ -86,4 +88,21 @@ export async function deleteAdminStoreInfo(
     headers: { "X-Admin-Password": adminPassword },
   });
   if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+export async function uploadAdminStoreInfoPhoto(
+  imageBase64: string,
+  adminPassword: string,
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/admin/store-info/upload-photo`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify({ imageBase64 }),
+  });
+  if (!res.ok) throw new Error("사진 업로드에 실패했습니다.");
+  const data = await res.json();
+  return data.url as string;
 }

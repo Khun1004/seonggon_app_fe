@@ -7,7 +7,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -22,6 +24,7 @@ import { AdminContext } from "@/components/contexts/AdminContext";
 import {
   AdminRoom,
   createAdminRoom,
+  deleteAdminRoom,
   getAdminRooms,
   hideAdminRoom,
   restoreAdminRoom,
@@ -29,8 +32,13 @@ import {
   uploadAdminRoomPhoto,
   UpsertRoomPayload,
 } from "@/constants/adminRoomApi";
+import {
+  AdminPalette as Palette,
+  Radius,
+  Shadow,
+  Spacing,
+} from "@/constants/adminTheme";
 import { resolvePhotoUrl } from "@/constants/api";
-import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const EMPTY_DRAFT: UpsertRoomPayload = {
   number: "",
@@ -178,6 +186,29 @@ export default function AdminSeats() {
     }
   };
 
+  const handleDelete = (room: AdminRoom) => {
+    Alert.alert(
+      "좌석 삭제",
+      `"${room.number}번" 좌석을 완전히 삭제할까요?\n이 작업은 되돌릴 수 없어요. 예전 예약 기록에 이 좌석이 표시돼 있었다면, 그 예약에서는 좌석 정보가 빈 값으로 보일 수 있어요.`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            if (!adminPassword) return;
+            try {
+              await deleteAdminRoom(room.id, adminPassword);
+              load();
+            } catch (e: any) {
+              Alert.alert("알림", e.message || "삭제에 실패했습니다.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const isModalOpen = isNew || !!editing;
 
   return (
@@ -274,6 +305,17 @@ export default function AdminSeats() {
                               true: Palette.amberDeep,
                             }}
                           />
+                          <TouchableOpacity
+                            onPress={() => handleDelete(room)}
+                            hitSlop={8}
+                            style={{ marginLeft: Spacing.sm, padding: 4 }}
+                          >
+                            <Ionicons
+                              name="trash-outline"
+                              size={18}
+                              color={Palette.error}
+                            />
+                          </TouchableOpacity>
                         </TouchableOpacity>
                       ))
                     )}
@@ -292,7 +334,10 @@ export default function AdminSeats() {
         animationType="slide"
         onRequestClose={closeModal}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalCard}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeaderRow}>
@@ -387,7 +432,7 @@ export default function AdminSeats() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

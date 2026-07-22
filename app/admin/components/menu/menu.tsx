@@ -1,4 +1,4 @@
-// app/admin/menu.tsx
+// app/admin/components/menu/menu.tsx
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
@@ -7,7 +7,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -16,12 +18,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AdminContext } from "@/components/contexts/AdminContext";
 import {
   AdminMenuItem,
   createAdminMenu,
+  deleteAdminMenu,
   getAdminMenus,
   hideAdminMenu,
   restoreAdminMenu,
@@ -29,10 +31,15 @@ import {
   uploadAdminMenuPhoto,
   UpsertMenuItemPayload,
 } from "@/constants/adminMenuApi";
+import {
+  AdminPalette as Palette,
+  Radius,
+  Shadow,
+  Spacing,
+} from "@/constants/adminTheme";
 import { resolvePhotoUrl } from "@/constants/api";
-import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
-const CATEGORIES = ["백숙", "고기", "사이드"];
+const CATEGORIES = ["백숙", "고기", "사이드", "음료", "주류", "추가 메뉴"];
 
 const EMPTY_DRAFT: UpsertMenuItemPayload = {
   category: "백숙",
@@ -158,6 +165,29 @@ export default function AdminMenu() {
     }
   };
 
+  const handleDelete = (item: AdminMenuItem) => {
+    Alert.alert(
+      "메뉴 삭제",
+      `"${item.name}"을(를) 완전히 삭제할까요?\n이 작업은 되돌릴 수 없어요.`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            if (!adminPassword) return;
+            try {
+              await deleteAdminMenu(item.id, adminPassword);
+              load();
+            } catch (e: any) {
+              Alert.alert("알림", e.message || "삭제에 실패했습니다.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const closeModal = () => {
     setEditing(null);
     setIsNew(false);
@@ -167,17 +197,6 @@ export default function AdminMenu() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <SafeAreaView edges={["top"]}>
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.eyebrow}>MENU MANAGEMENT</Text>
-              <Text style={styles.headerTitle}>메뉴 관리</Text>
-            </View>
-          </View>
-        </SafeAreaView>
-      </View>
-
       {loading ? (
         <View style={styles.centerBox}>
           <ActivityIndicator color={Palette.amberDeep} />
@@ -248,6 +267,17 @@ export default function AdminMenu() {
                           true: Palette.amberDeep,
                         }}
                       />
+                      <TouchableOpacity
+                        onPress={() => handleDelete(item)}
+                        hitSlop={8}
+                        style={{ marginLeft: Spacing.sm, padding: 4 }}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={Palette.error}
+                        />
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   ))
                 )}
@@ -264,7 +294,10 @@ export default function AdminMenu() {
         animationType="slide"
         onRequestClose={closeModal}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalCard}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeaderRow}>
@@ -395,7 +428,7 @@ export default function AdminMenu() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -403,28 +436,6 @@ export default function AdminMenu() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.cream },
-  header: {
-    backgroundColor: Palette.charcoal,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: Spacing.sm,
-  },
-  eyebrow: {
-    color: Palette.gold,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.5,
-    marginBottom: 2,
-    textAlign: "center",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: Palette.cream },
   centerBox: {
     alignItems: "center",
     justifyContent: "center",

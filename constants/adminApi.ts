@@ -6,12 +6,26 @@ import { BASE_URL } from "@/constants/api";
 // 쓰는 화면이라 단순하게 만들었어요).
 
 export async function adminLogin(password: string): Promise<boolean> {
-  const res = await fetch(`${BASE_URL}/api/admin/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
-  });
-  return res.ok;
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api/admin/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+  } catch (networkError: any) {
+    // fetch 자체가 실패한 경우 (서버에 연결도 못 한 경우) — BASE_URL이나
+    // 네트워크 연결 문제일 가능성이 높아서, 원인을 그대로 알려줍니다.
+    throw new Error(
+      `서버에 연결하지 못했습니다 (${BASE_URL}): ${networkError?.message ?? networkError}`,
+    );
+  }
+  if (res.status === 401) return false;
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
+    throw new Error(`로그인 요청 실패 (status ${res.status}) ${bodyText}`);
+  }
+  return true;
 }
 
 export type AdminReservation = {
@@ -106,4 +120,38 @@ export async function setReviewOwnerReply(
     const data = await res.json().catch(() => ({}));
     throw new Error(data.message || "답변 저장에 실패했습니다.");
   }
+}
+
+export async function generateAiReply(
+  id: number,
+  adminPassword: string,
+): Promise<string> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reviews/${id}/generate-reply`,
+    {
+      method: "POST",
+      headers: { "X-Admin-Password": adminPassword },
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "AI 답변 생성에 실패했습니다.");
+  return data.reply as string;
+}
+
+export type MenuPopularityRow = {
+  key: string;
+  quantity: number;
+};
+
+export async function getMenuPopularity(
+  adminPassword: string,
+): Promise<MenuPopularityRow[]> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reservations/menu-popularity`,
+    {
+      headers: { "X-Admin-Password": adminPassword },
+    },
+  );
+  if (!res.ok) throw new Error("인기 메뉴 순위를 불러오지 못했습니다.");
+  return (await res.json()) as MenuPopularityRow[];
 }

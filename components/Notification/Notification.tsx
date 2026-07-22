@@ -47,6 +47,16 @@ const TYPE_META: Record<
     bg: Palette.amberSoft,
   },
   SIGNUP_WELCOME: { icon: "sparkles", color: "#993556", bg: "#FBEAF0" },
+  REVIEW_CREATED: {
+    icon: "star",
+    color: Palette.amberDeep,
+    bg: Palette.amberSoft,
+  },
+  REVIEW_REPLY: {
+    icon: "chatbubble-ellipses",
+    color: Palette.amberDeep,
+    bg: Palette.amberSoft,
+  },
 };
 
 const DEFAULT_META = {

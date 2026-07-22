@@ -916,16 +916,17 @@ const styles = StyleSheet.create({
   actionButtonRow: {
     flexDirection: "row",
     gap: Spacing.sm,
+    marginTop: Spacing.md + 4,
   },
   likeBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
+    height: 30,
     backgroundColor: Palette.creamDim,
     paddingHorizontal: 10,
-    paddingVertical: 6,
     borderRadius: Radius.sm,
-    marginTop: Spacing.sm,
   },
   likeText: {
     fontSize: 11,
@@ -934,10 +935,11 @@ const styles = StyleSheet.create({
   commentBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
+    height: 30,
     backgroundColor: Palette.amberSoft,
     paddingHorizontal: 10,
-    paddingVertical: 6,
     borderRadius: Radius.sm,
   },
   commentBtnText: {
