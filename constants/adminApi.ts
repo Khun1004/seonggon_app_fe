@@ -155,3 +155,168 @@ export async function getMenuPopularity(
   if (!res.ok) throw new Error("인기 메뉴 순위를 불러오지 못했습니다.");
   return (await res.json()) as MenuPopularityRow[];
 }
+
+// ── 가게 정보 (관리자) ──────────────────────────────────────
+export type AdminStoreProfile = {
+  address: string;
+  phone: string;
+  openTime: string;
+  closeTime: string;
+  lastOrderTime: string;
+  naverRating?: number;
+  naverReviewCount?: number;
+  blogReviewCount?: number;
+};
+
+export type UpsertStoreProfilePayload = {
+  address: string;
+  phone: string;
+  openTime: string;
+  closeTime: string;
+  lastOrderTime: string;
+  naverRating?: number;
+  naverReviewCount?: number;
+  blogReviewCount?: number;
+};
+
+export type AdminClosedDate = {
+  id: number;
+  date: string;
+  reason?: string;
+};
+
+export async function getAdminStoreProfile(
+  adminPassword: string,
+): Promise<AdminStoreProfile> {
+  const res = await fetch(`${BASE_URL}/api/admin/store-profile`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
+    throw new Error(
+      `가게 정보 불러오기 실패 (status ${res.status}): ${bodyText}`,
+    );
+  }
+  return (await res.json()) as AdminStoreProfile;
+}
+
+export async function updateAdminStoreProfile(
+  payload: UpsertStoreProfilePayload,
+  adminPassword: string,
+): Promise<AdminStoreProfile> {
+  const res = await fetch(`${BASE_URL}/api/admin/store-profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
+    let message = bodyText;
+    try {
+      message = JSON.parse(bodyText).message || bodyText;
+    } catch {}
+    throw new Error(`저장 실패 (status ${res.status}): ${message}`);
+  }
+  return (await res.json()) as AdminStoreProfile;
+}
+
+export async function getAdminClosedDates(
+  adminPassword: string,
+): Promise<AdminClosedDate[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/store-profile/closed-dates`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
+    throw new Error(
+      `휴무일 목록 불러오기 실패 (status ${res.status}): ${bodyText}`,
+    );
+  }
+  return (await res.json()) as AdminClosedDate[];
+}
+
+export async function addAdminClosedDate(
+  date: string,
+  reason: string | undefined,
+  adminPassword: string,
+): Promise<AdminClosedDate> {
+  const res = await fetch(`${BASE_URL}/api/admin/store-profile/closed-dates`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify({ date, reason }),
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
+    let message = bodyText;
+    try {
+      message = JSON.parse(bodyText).message || bodyText;
+    } catch {
+      // JSON이 아니면 원본 텍스트 그대로 사용
+    }
+    throw new Error(`휴무일 등록 실패 (status ${res.status}): ${message}`);
+  }
+  return (await res.json()) as AdminClosedDate;
+}
+
+export async function deleteAdminClosedDate(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/store-profile/closed-dates/${id}`,
+    {
+      method: "DELETE",
+      headers: { "X-Admin-Password": adminPassword },
+    },
+  );
+  if (!res.ok) throw new Error("휴무일 삭제에 실패했습니다.");
+}
+
+// ── 예약 가능 시간 (매장 식사 / 포장 따로 관리) ────────────
+export type ReservationTimeConfig = {
+  type: string; // "DINE_IN" | "TAKEOUT"
+  startTime: string; // "11:00"
+  endTime: string; // "20:00"
+  intervalMinutes: number;
+  slots: string[]; // 계산된 시간 목록 (읽기 전용, 미리보기용)
+};
+
+export type UpsertReservationTimeConfigPayload = {
+  startTime: string;
+  endTime: string;
+  intervalMinutes: number;
+};
+
+export async function getAdminReservationTimeConfig(
+  type: "dine-in" | "takeout",
+  adminPassword: string,
+): Promise<ReservationTimeConfig> {
+  const res = await fetch(`${BASE_URL}/api/admin/reservation-times/${type}`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("예약 시간 설정을 불러오지 못했습니다.");
+  return (await res.json()) as ReservationTimeConfig;
+}
+
+export async function updateAdminReservationTimeConfig(
+  type: "dine-in" | "takeout",
+  payload: UpsertReservationTimeConfigPayload,
+  adminPassword: string,
+): Promise<ReservationTimeConfig> {
+  const res = await fetch(`${BASE_URL}/api/admin/reservation-times/${type}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("예약 시간 설정 저장에 실패했습니다.");
+  return (await res.json()) as ReservationTimeConfig;
+}

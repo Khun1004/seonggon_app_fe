@@ -5,7 +5,7 @@
 // 접속되는 실제 서버 주소(예: "https://seonggong-api.up.railway.app")로 바꿔야 해요.
 // 로컬 IP(192.168.x.x)는 같은 와이파이에 있는 사람에게만 보이기 때문에,
 // 그 상태로 APK를 만들면 다른 사람 휴대폰에서는 로그인/예약이 전부 실패해요.
-export const BASE_URL = "http://192.168.1.100:8080";
+export const BASE_URL = "http://192.168.1.101:8080";
 
 // 리뷰 사진 등 서버에 저장된 URL을 화면에 보여줄 때 항상 이 함수를 거쳐주세요.
 // 예전 버그로 인해 DB에 휴대폰 로컬 경로(file://, ph://, content:// 등)가 남아있는
@@ -581,4 +581,97 @@ export async function getMenuItems(): Promise<BackendMenuItem[]> {
   const res = await fetch(`${BASE_URL}/api/menu`);
   if (!res.ok) throw new Error("메뉴를 불러오지 못했습니다.");
   return (await res.json()) as BackendMenuItem[];
+}
+
+// ── 가게 정보 (주소·전화·영업시간·휴무일·리뷰 통계) ────────────
+export type StoreProfile = {
+  address: string;
+  phone: string;
+  openTime: string;
+  closeTime: string;
+  lastOrderTime: string;
+  naverRating?: number;
+  naverReviewCount?: number;
+  blogReviewCount?: number;
+};
+
+export type ClosedDate = {
+  id: number;
+  date: string; // "2026-07-22"
+  reason?: string;
+};
+
+export type ReviewStats = {
+  averageRating: number;
+  totalCount: number;
+  highlightQuotes: string[];
+};
+
+export async function getStoreProfile(): Promise<StoreProfile> {
+  const res = await fetch(`${BASE_URL}/api/store-profile`);
+  if (!res.ok) throw new Error("가게 정보를 불러오지 못했습니다.");
+  return (await res.json()) as StoreProfile;
+}
+
+export async function getUpcomingClosedDates(): Promise<ClosedDate[]> {
+  const res = await fetch(`${BASE_URL}/api/store-profile/closed-dates`);
+  if (!res.ok) throw new Error("휴무일 정보를 불러오지 못했습니다.");
+  return (await res.json()) as ClosedDate[];
+}
+
+export async function getReviewStats(): Promise<ReviewStats> {
+  const res = await fetch(`${BASE_URL}/api/store-profile/review-stats`);
+  if (!res.ok) throw new Error("리뷰 통계를 불러오지 못했습니다.");
+  return (await res.json()) as ReviewStats;
+}
+
+// ── 예약 가능 시간 (손님용, 매장 식사/포장 따로) ────────────
+export type ReservationTimeConfig = {
+  type: string;
+  startTime: string;
+  endTime: string;
+  intervalMinutes: number;
+  slots: string[]; // 이 화면에서 실제로 쓸 시간 목록
+};
+
+export async function getReservationTimeConfig(
+  type: "dine-in" | "takeout",
+): Promise<ReservationTimeConfig> {
+  const res = await fetch(`${BASE_URL}/api/reservation-times/${type}`);
+  if (!res.ok) throw new Error("예약 가능 시간을 불러오지 못했습니다.");
+  return (await res.json()) as ReservationTimeConfig;
+}
+
+// ── 방문 도장 (5회 방문 혜택, 서버에 저장) ────────────────
+export type VisitStampStatus = {
+  visitCount: number;
+  totalStamps: number;
+  canClaim: boolean;
+  lastClaimedAt: string | null;
+};
+
+export async function getVisitStampStatus(
+  phone: string,
+  loginId?: string,
+): Promise<VisitStampStatus> {
+  const query = loginId
+    ? `phone=${encodeURIComponent(phone)}&loginId=${encodeURIComponent(loginId)}`
+    : `phone=${encodeURIComponent(phone)}`;
+  const res = await fetch(`${BASE_URL}/api/rewards/visit-stamp?${query}`);
+  if (!res.ok) throw new Error("방문 도장 현황을 불러오지 못했습니다.");
+  return (await res.json()) as VisitStampStatus;
+}
+
+export async function claimVisitStampReward(
+  phone: string,
+  loginId: string,
+): Promise<VisitStampStatus> {
+  const res = await fetch(`${BASE_URL}/api/rewards/visit-stamp/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, loginId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "혜택 사용에 실패했습니다.");
+  return data as VisitStampStatus;
 }

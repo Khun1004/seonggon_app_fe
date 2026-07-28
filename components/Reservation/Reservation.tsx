@@ -29,13 +29,18 @@ import {
   RoomOption,
   RoomsContext,
 } from "@/components/contexts/RoomsContext";
-import { getReservationAvailability, TakenSlot } from "@/constants/api";
+import {
+  ClosedDate,
+  getReservationAvailability,
+  getReservationTimeConfig,
+  getUpcomingClosedDates,
+  TakenSlot,
+} from "@/constants/api";
 import { findMenuItemById, resolveImageSource } from "@/constants/menu-data";
 import {
   getReservationMenuName,
   RESERVATION_MENU_DATA,
 } from "@/constants/reservation-menu-data";
-import { RESERVATION_TIME_SLOTS } from "@/constants/rooms-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const { width } = Dimensions.get("window");
@@ -92,8 +97,7 @@ const HOLIDAY_NAMES: Record<string, string> = {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-// 예약 가능 시간(RESERVATION_TIME_SLOTS)은 constants/rooms-data.ts에서 가져옵니다.
-// 좌석 안내 화면(RoomDetail)에서도 같은 배열을 참조해서 항상 같은 시간이 보여요.
+// 예약 가능 시간은 관리자가 설정한 시간표(매장 예약/포장 따로)를 서버에서 받아옵니다.
 
 const toDateStr = (year: number, month: number, day: number) =>
   `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -192,6 +196,28 @@ export default function Reservation() {
   // 선택한 날짜에 이미 찬 (자리, 시간) 목록 — 서버에서 받아와 버튼을 회색 처리합니다.
   const [takenSlots, setTakenSlots] = useState<TakenSlot[]>([]);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+
+  // 관리자가 등록한 휴무일 — 달력에서 아예 누를 수 없게 회색 처리해요.
+  const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
+  useEffect(() => {
+    getUpcomingClosedDates()
+      .then(setClosedDates)
+      .catch(() => {});
+  }, []);
+  const closedDateSet = new Set(closedDates.map((d) => d.date));
+  const closedDateReasonMap: Record<string, string> = {};
+  closedDates.forEach((d) => {
+    closedDateReasonMap[d.date] = d.reason || "휴무";
+  });
+
+  // 예약 가능 시간 — 매장 예약/포장을 관리자가 따로 설정한 시간표를 그대로 씁니다.
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  useEffect(() => {
+    const type = orderMode === "takeout" ? "takeout" : "dine-in";
+    getReservationTimeConfig(type)
+      .then((config) => setTimeSlots(config.slots))
+      .catch(() => setTimeSlots([]));
+  }, [orderMode]);
 
   useEffect(() => {
     if (!selectedDate) {
@@ -459,7 +485,8 @@ export default function Reservation() {
   const isDisabled = (year: number, month: number, day: number) =>
     isPast(year, month, day) ||
     isWeekend(year, month, day) ||
-    isHoliday(year, month, day);
+    isHoliday(year, month, day) ||
+    closedDateSet.has(toDateStr(year, month, day));
 
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(calYear, calMonth);
@@ -528,11 +555,13 @@ export default function Reservation() {
               );
             const dateStr = toDateStr(calYear, calMonth, day);
             const disabled = isDisabled(calYear, calMonth, day);
+            const isClosed = closedDateSet.has(dateStr);
             const selected = selectedDate === dateStr;
             const dow = (firstDay + day - 1) % 7;
             const isSun = dow === 0;
             const isSat = dow === 6;
-            const holiday = HOLIDAY_NAMES[dateStr];
+            const holiday =
+              HOLIDAY_NAMES[dateStr] || closedDateReasonMap[dateStr];
 
             return (
               <TouchableOpacity
@@ -546,17 +575,20 @@ export default function Reservation() {
                   disabled && styles.disabledDayCell,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.dayText,
-                    selected && styles.selectedDayText,
-                    disabled && styles.disabledDayText,
-                    !disabled && isSun && styles.sundayText,
-                    !disabled && isSat && styles.saturdayText,
-                  ]}
-                >
-                  {day}
-                </Text>
+                <View style={[isClosed && !selected && styles.closedDayCircle]}>
+                  <Text
+                    style={[
+                      styles.dayText,
+                      selected && styles.selectedDayText,
+                      disabled && styles.disabledDayText,
+                      !disabled && isSun && styles.sundayText,
+                      !disabled && isSat && styles.saturdayText,
+                      isClosed && !selected && styles.closedDayText,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                </View>
                 {holiday && (
                   <Text style={styles.holidayLabel} numberOfLines={1}>
                     {holiday.slice(0, 2)}
@@ -578,6 +610,17 @@ export default function Reservation() {
             <View style={[styles.legendDot, { backgroundColor: "#2979FF" }]} />
             <Text style={styles.legendText}>토요일 - 전화 예약만</Text>
           </View>
+          {closedDates.length > 0 && (
+            <View style={styles.legendItem}>
+              <View
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: Palette.inkFaint },
+                ]}
+              />
+              <Text style={styles.legendText}>휴무일 - 예약 불가</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -820,7 +863,7 @@ export default function Reservation() {
               {loadingAvailability ? " (예약 현황 확인 중...)" : ""}
             </Text>
             <View style={styles.timeGrid}>
-              {RESERVATION_TIME_SLOTS.map((time) => {
+              {timeSlots.map((time) => {
                 const past = isTimePast(time);
                 const bookedByOther = !past && isTimeTaken(time);
                 const disabled = past || bookedByOther;
@@ -1332,7 +1375,7 @@ export default function Reservation() {
               <Text style={styles.sectionSubText}>예약 현황 확인 중...</Text>
             )}
             <View style={styles.timeGrid}>
-              {RESERVATION_TIME_SLOTS.map((time) => {
+              {timeSlots.map((time) => {
                 const past = isTimePast(time);
                 return (
                   <TouchableOpacity
@@ -1892,6 +1935,16 @@ const styles = StyleSheet.create({
   },
   selectedDayCell: { backgroundColor: Palette.amber, borderRadius: 10 },
   disabledDayCell: { opacity: 0.35 },
+  closedDayCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Palette.error,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closedDayText: { color: Palette.error, fontWeight: "700" },
   dayText: { fontSize: 14, fontWeight: "500", color: Palette.ink },
   selectedDayText: { color: Palette.white, fontWeight: "700" },
   disabledDayText: { color: Palette.inkFaint },

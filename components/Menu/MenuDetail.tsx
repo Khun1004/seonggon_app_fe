@@ -23,6 +23,10 @@ import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const { width } = Dimensions.get("window");
 
+// 종류(재료) 그리드 — 화면 좌우 여백을 뺀 너비를 3등분해서 칸 크기를 정합니다.
+// (퍼센트 기반으로 바꿔서 아래에서 직접 계산합니다 — 화면 너비를 몰라도
+// 항상 정확히 3칸이 맞아떨어져요.)
+
 export default function MenuDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -201,18 +205,28 @@ export default function MenuDetail() {
             </View>
           )}
 
-          {/* 탭 내용: 종류 (들어간 재료) */}
+          {/* 탭 내용: 종류 (들어간 재료) — 한 줄에 3개씩, 네모 사진 + 아래 이름 */}
           {infoTab === "ingredients" && (
             <View style={styles.tabContent}>
               {hasIngredients ? (
-                <View style={styles.ingredientList}>
-                  {item.mushrooms!.map((mushroom) => (
-                    <View key={mushroom.name} style={styles.ingredientRow}>
+                <View style={styles.ingredientGrid}>
+                  {item.mushrooms!.map((mushroom, idx) => (
+                    <View
+                      key={mushroom.name}
+                      style={[
+                        styles.ingredientItem,
+                        idx % 3 !== 2 && {
+                          marginRight: "5%",
+                        },
+                      ]}
+                    >
                       <Image
                         source={resolveImageSource(mushroom.image)}
                         style={styles.ingredientImage}
                       />
-                      <Text style={styles.ingredientName}>{mushroom.name}</Text>
+                      <Text style={styles.ingredientName} numberOfLines={2}>
+                        {mushroom.name}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -437,30 +451,28 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // 종류 탭 — 재료 리스트
-  ingredientList: {
-    gap: Spacing.sm + 4,
-  },
-  ingredientRow: {
+  // 종류 탭 — 한 줄에 3개, 네모 사진 위 + 이름 아래
+  ingredientGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  ingredientItem: {
+    width: "30%",
     alignItems: "center",
-    backgroundColor: Palette.white,
-    borderRadius: Radius.md,
-    padding: Spacing.sm + 4,
-    gap: Spacing.md,
-    ...Shadow.card,
+    marginBottom: Spacing.md,
   },
   ingredientImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 2,
-    borderColor: Palette.amberSoft,
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.creamDim,
+    marginBottom: Spacing.sm,
   },
   ingredientName: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
     color: Palette.ink,
+    textAlign: "center",
   },
   noIngredientText: {
     fontSize: 13,

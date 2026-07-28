@@ -1,7 +1,12 @@
 // components/contexts/VisitContext.tsx
 import React, { createContext, ReactNode, useState } from "react";
 
-import { getMyReservations } from "@/constants/api";
+import {
+  claimVisitStampReward,
+  getMyReservations,
+  getMyReviews,
+  getVisitStampStatus,
+} from "@/constants/api";
 
 export type VisitRecord = {
   id: string;
@@ -13,44 +18,84 @@ export type VisitRecord = {
 export const TOTAL_STAMPS = 5;
 
 type VisitContextType = {
-  visitCount: number; // 0~5, 5에 도달하면 보상 가능
+  visitCount: number; // 0~5, 서버에서 계산해서 내려줍니다
   visitRecords: VisitRecord[];
-  rewardClaimed: boolean;
+  canClaim: boolean; // 서버 기준 — 지금 5개를 다 채워서 받을 수 있는 상태인지
   loading: boolean;
-  // 저장된 전화번호로 예약 내역을 불러와 도장 개수를 계산합니다.
-  refreshVisits: (phone: string) => Promise<void>;
+  // 저장된 전화번호로 예약 내역을, loginId로 내 리뷰 목록과 도장 현황을
+  // 불러와서 도장 개수와 "이 방문에 리뷰를 썼는지"를 계산합니다.
+  refreshVisits: (phone: string, loginId?: string) => Promise<void>;
+  claimReward: (phone: string, loginId: string) => Promise<void>;
 };
 
 export const VisitContext = createContext<VisitContextType>({
   visitCount: 0,
   visitRecords: [],
-  rewardClaimed: false,
+  canClaim: false,
   loading: false,
   refreshVisits: async () => {},
+  claimReward: async () => {},
 });
 
 export const VisitProvider = ({ children }: { children: ReactNode }) => {
   const [visitRecords, setVisitRecords] = useState<VisitRecord[]>([]);
+  const [visitCount, setVisitCount] = useState(0);
+  const [canClaim, setCanClaim] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // 방문 도장은 별도 테이블 없이, "확정된(CONFIRMED) '방문' 예약 1건 = 도장 1개"로 계산해요.
   // 포장(TAKEOUT) 주문은 매장에 오시는 게 아니라서 도장 대상에서 제외합니다.
   // 예약을 취소하면 서버에서 상태가 CANCELLED로 바뀌기 때문에, 여기서도 자동으로 도장이 빠집니다.
-  const refreshVisits = async (phone: string) => {
+  // 실제 도장 개수(몇 번째 회차인지 포함)는 서버(getVisitStampStatus)가 계산해서 내려줘요.
+  const refreshVisits = async (phone: string, loginId?: string) => {
     if (!phone) return;
     setLoading(true);
     try {
-      const data = await getMyReservations(phone);
-      const confirmed = data
+      const [reservationData, reviewData, stampStatus] = await Promise.all([
+        getMyReservations(phone),
+        loginId ? getMyReviews(loginId).catch(() => []) : Promise.resolve([]),
+        getVisitStampStatus(phone, loginId).catch(() => null),
+      ]);
+
+      // 방문(예약)들을 날짜 오래된 순으로 정렬해둡니다 — 리뷰를 "그 리뷰보다
+      // 먼저 있었던 방문 중 가장 최근 방문"에 매칭시키기 위해서예요.
+      const visitsOldestFirst = reservationData
+        .filter((r) => r.status === "CONFIRMED" && r.type !== "TAKEOUT")
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      const reviewDates = reviewData
+        .map((r) => (r.createdAt ? r.createdAt.slice(0, 10) : null))
+        .filter((d): d is string => !!d)
+        .sort();
+
+      const hasReviewByVisitId: Record<string, boolean> = {};
+      for (const reviewDate of reviewDates) {
+        for (let i = visitsOldestFirst.length - 1; i >= 0; i--) {
+          const visit = visitsOldestFirst[i];
+          if (visit.date <= reviewDate && !hasReviewByVisitId[visit.id]) {
+            hasReviewByVisitId[visit.id] = true;
+            break;
+          }
+        }
+      }
+
+      const confirmed = reservationData
         .filter((r) => r.status === "CONFIRMED" && r.type !== "TAKEOUT")
         .sort((a, b) => b.createdAt - a.createdAt)
         .map((r) => ({
           id: String(r.id),
           date: r.date,
           roomLabel: r.roomLabel,
-          hasReview: false,
+          hasReview: !!hasReviewByVisitId[String(r.id)],
         }));
       setVisitRecords(confirmed);
+
+      if (stampStatus) {
+        setVisitCount(stampStatus.visitCount);
+        setCanClaim(stampStatus.canClaim);
+      } else {
+        setVisitCount(Math.min(confirmed.length, TOTAL_STAMPS));
+      }
     } catch {
       // 조용히 무시 — 화면이 죽지 않도록
     } finally {
@@ -58,19 +103,23 @@ export const VisitProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const visitCount = Math.min(visitRecords.length, TOTAL_STAMPS);
-  // 보상(5회 달성) 소진 처리는 아직 없어서, 5회를 넘긴 이후에도 계속 "달성" 상태로 보여요.
-  // 나중에 사장님이 보상을 지급하면 초기화하는 기능은 관리자 화면이 생기면 추가할 수 있어요.
-  const rewardClaimed = false;
+  // 서버에 실제로 "이번 회차를 받았다"고 기록합니다. 성공하면 도장판이
+  // 서버 기준으로 다시 계산돼서(보통 0으로) 화면에 반영돼요.
+  const claimReward = async (phone: string, loginId: string) => {
+    const updated = await claimVisitStampReward(phone, loginId);
+    setVisitCount(updated.visitCount);
+    setCanClaim(updated.canClaim);
+  };
 
   return (
     <VisitContext.Provider
       value={{
         visitCount,
         visitRecords,
-        rewardClaimed,
+        canClaim,
         loading,
         refreshVisits,
+        claimReward,
       }}
     >
       {children}

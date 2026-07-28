@@ -1,8 +1,10 @@
 // components/HomeInfo/HomeInfo.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
-import React from "react";
+import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   ScrollView,
@@ -12,26 +14,89 @@ import {
   View,
 } from "react-native";
 
+import {
+  ClosedDate,
+  getReviewStats,
+  getStoreProfile,
+  getUpcomingClosedDates,
+  ReviewStats,
+  StoreProfile,
+} from "@/constants/api";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
-const RESTAURANT_PHONE = "0507-1410-7634";
-const RESTAURANT_ADDRESS = "대구 동구 팔공산로199길 12";
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const HOURS_DATA = [
-  { day: "목", time: "11:00 - 21:00", last: "19:30 라스트오더", isToday: true },
-  { day: "금", time: "11:00 - 21:00", last: "19:30 라스트오더" },
-  { day: "토", time: "11:00 - 21:00", last: "19:30 라스트오더" },
-  { day: "일", time: "11:00 - 21:00", last: "19:30 라스트오더" },
-  { day: "월", time: "11:00 - 21:00", last: "19:30 라스트오더" },
-  { day: "화", time: "11:00 - 21:00", last: "19:30 라스트오더" },
-  { day: "수", time: "11:00 - 21:00", last: "19:30 라스트오더" },
-];
+function toDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// 시:분 문자열("11:00")과 지금 시각을 비교하기 위해, 오늘 날짜 기준
+// Date 객체로 바꿔줍니다.
+function timeStrToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
 
 export default function HomeInfo() {
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<StoreProfile | null>(null);
+  const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([getStoreProfile(), getUpcomingClosedDates(), getReviewStats()])
+      .then(([p, closures, stats]) => {
+        setProfile(p);
+        setClosedDates(closures);
+        setReviewStats(stats);
+      })
+      .catch(() => {
+        // 못 불러와도 화면이 죽지 않도록 조용히 무시 (아래에서 로딩만 풀어줌)
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const closedDateSet = new Set(closedDates.map((c) => c.date));
+
+  // 오늘부터 6일 뒤까지, 실제 날짜와 요일을 계산해서 영업시간표를 만듭니다.
+  // 관리자가 등록한 휴무일이면 그 요일 칸에 "휴무"로 표시돼요.
+  const today = new Date();
+  const weekRows = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const dateStr = toDateStr(d);
+    return {
+      dateStr,
+      day: WEEKDAY_LABELS[d.getDay()],
+      dateLabel: `${d.getMonth() + 1}/${d.getDate()}`,
+      isToday: i === 0,
+      isClosed: closedDateSet.has(dateStr),
+    };
+  });
+
   const getStatus = () => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    if (currentHour >= 11 && currentHour < 21) {
+    const todayStr = toDateStr(today);
+    if (closedDateSet.has(todayStr)) {
+      return { text: "휴무", color: Palette.error, bg: "rgba(162,62,62,0.1)" };
+    }
+    if (!profile) {
+      return {
+        text: "영업 중",
+        color: Palette.success,
+        bg: "rgba(91,123,90,0.12)",
+      };
+    }
+    const nowMin = today.getHours() * 60 + today.getMinutes();
+    const openMin = timeStrToMinutes(profile.openTime);
+    const closeMin = timeStrToMinutes(profile.closeTime);
+    if (nowMin >= openMin && nowMin < closeMin) {
       return {
         text: "영업 중",
         color: Palette.success,
@@ -48,15 +113,25 @@ export default function HomeInfo() {
   const status = getStatus();
 
   const makeCall = () => {
-    Linking.openURL(`tel:${RESTAURANT_PHONE}`).catch(() => {
+    if (!profile) return;
+    Linking.openURL(`tel:${profile.phone}`).catch(() => {
       Alert.alert("에러", "전화 걸기 기능을 실행할 수 없습니다.");
     });
   };
 
   const copyAddress = async () => {
-    await Clipboard.setStringAsync(RESTAURANT_ADDRESS);
+    if (!profile) return;
+    await Clipboard.setStringAsync(profile.address);
     Alert.alert("알림", "주소가 클립보드에 복사되었습니다.");
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingBox]}>
+        <ActivityIndicator color={Palette.amberDeep} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -83,12 +158,12 @@ export default function HomeInfo() {
           </View>
 
           <View style={styles.card}>
-            {HOURS_DATA.map((item, index) => (
+            {weekRows.map((item, index) => (
               <View
-                key={index}
+                key={item.dateStr}
                 style={[
                   styles.hourRow,
-                  index === HOURS_DATA.length - 1 && { borderBottomWidth: 0 },
+                  index === weekRows.length - 1 && { borderBottomWidth: 0 },
                   item.isToday && styles.todayRow,
                 ]}
               >
@@ -101,15 +176,32 @@ export default function HomeInfo() {
                   {item.day}
                 </Text>
                 <View style={styles.timeInfo}>
-                  <Text
-                    style={[
-                      styles.timeText,
-                      item.isToday && { fontWeight: "700" },
-                    ]}
-                  >
-                    {item.time}
-                  </Text>
-                  <Text style={styles.lastOrderText}>{item.last}</Text>
+                  {item.isClosed ? (
+                    <Text
+                      style={[
+                        styles.timeText,
+                        { color: Palette.error, fontWeight: "700" },
+                      ]}
+                    >
+                      휴무
+                    </Text>
+                  ) : (
+                    <>
+                      <Text
+                        style={[
+                          styles.timeText,
+                          item.isToday && { fontWeight: "700" },
+                        ]}
+                      >
+                        {profile
+                          ? `${profile.openTime} - ${profile.closeTime}`
+                          : "-"}
+                      </Text>
+                      <Text style={styles.lastOrderText}>
+                        {profile ? `${profile.lastOrderTime} 라스트오더` : ""}
+                      </Text>
+                    </>
+                  )}
                 </View>
                 {item.isToday && (
                   <View style={styles.todayIndicator}>
@@ -159,31 +251,88 @@ export default function HomeInfo() {
             <Text style={styles.sectionTitle}>리뷰 및 별점</Text>
           </View>
           <View style={styles.card}>
-            <View style={styles.ratingSummary}>
-              <Text style={styles.totalRating}>4.73</Text>
-              <View style={{ marginLeft: Spacing.md }}>
-                <View style={{ flexDirection: "row", gap: 1 }}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Ionicons
-                      key={s}
-                      name="star"
-                      size={14}
-                      color={Palette.gold}
-                    />
-                  ))}
+            {/* 앱 방문자 리뷰 — 실제 앱 안에서 쓴 리뷰 데이터 */}
+            <View style={styles.reviewSourceRow}>
+              <View style={[styles.sourceBadge, styles.appBadge]}>
+                <Ionicons name="restaurant" size={12} color={Palette.white} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sourceLabel}>앱 방문자 리뷰</Text>
+                <View style={styles.ratingSummary}>
+                  <Text style={styles.totalRating}>
+                    {reviewStats ? reviewStats.averageRating.toFixed(2) : "-"}
+                  </Text>
+                  <View style={{ marginLeft: Spacing.sm }}>
+                    <View style={{ flexDirection: "row", gap: 1 }}>
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Ionicons
+                          key={s}
+                          name="star"
+                          size={12}
+                          color={Palette.gold}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.ratingCount}>
+                      리뷰 {reviewStats ? reviewStats.totalCount : 0}개
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.ratingCount}>
-                  방문자 리뷰 2,474 · 블로그 리뷰 1,046
-                </Text>
               </View>
             </View>
-            <View style={styles.divider} />
-            <Text style={styles.reviewQuote}>
-              "맑고 깊은 국물 맛이 일품이에요, 부모님 모시고 오기 좋습니다!"
-            </Text>
-            <Text style={styles.reviewQuote}>
-              "능이 향이 은은해서 건강해지는 기분이에요. 재방문 의사 200%!"
-            </Text>
+
+            {/* 네이버 방문자 리뷰 — 사장님이 직접 입력한 값 */}
+            {profile?.naverRating != null && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.reviewSourceRow}>
+                  <View style={[styles.sourceBadge, styles.naverBadge]}>
+                    <Text style={styles.naverBadgeText}>N</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sourceLabel}>네이버 방문자 리뷰</Text>
+                    <Text style={styles.sourceValueText}>
+                      {profile.naverRating.toFixed(2)}점
+                      {profile.naverReviewCount != null &&
+                        ` · 리뷰 ${profile.naverReviewCount.toLocaleString()}개`}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* 블로그 리뷰 — 사장님이 직접 입력한 값 */}
+            {profile?.blogReviewCount != null && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.reviewSourceRow}>
+                  <View style={[styles.sourceBadge, styles.blogBadge]}>
+                    <Ionicons
+                      name="document-text"
+                      size={12}
+                      color={Palette.white}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sourceLabel}>블로그 리뷰</Text>
+                    <Text style={styles.sourceValueText}>
+                      {profile.blogReviewCount.toLocaleString()}개
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {reviewStats && reviewStats.highlightQuotes.length > 0 && (
+              <>
+                <View style={styles.divider} />
+                {reviewStats.highlightQuotes.map((q, idx) => (
+                  <Text key={idx} style={styles.reviewQuote}>
+                    "{q}"
+                  </Text>
+                ))}
+              </>
+            )}
           </View>
         </View>
 
@@ -195,7 +344,7 @@ export default function HomeInfo() {
             </View>
             <View style={{ flex: 1, marginLeft: Spacing.sm + 4 }}>
               <Text style={styles.contactLabel}>주소</Text>
-              <Text style={styles.contactValue}>{RESTAURANT_ADDRESS}</Text>
+              <Text style={styles.contactValue}>{profile?.address ?? "-"}</Text>
             </View>
             <Text style={styles.actionBadge}>복사</Text>
           </TouchableOpacity>
@@ -209,7 +358,7 @@ export default function HomeInfo() {
             </View>
             <View style={{ flex: 1, marginLeft: Spacing.sm + 4 }}>
               <Text style={styles.contactLabel}>안내 및 예약</Text>
-              <Text style={styles.contactValue}>{RESTAURANT_PHONE}</Text>
+              <Text style={styles.contactValue}>{profile?.phone ?? "-"}</Text>
             </View>
             <Text style={styles.actionBadge}>전화</Text>
           </TouchableOpacity>
@@ -226,6 +375,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.cream,
   },
+  loadingBox: { justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -401,7 +551,33 @@ const styles = StyleSheet.create({
   ratingSummary: {
     flexDirection: "row",
     alignItems: "center",
+    marginTop: 4,
   },
+  reviewSourceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm + 2,
+    paddingVertical: 2,
+  },
+  sourceBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  appBadge: { backgroundColor: Palette.amberDeep },
+  naverBadge: { backgroundColor: "#03C75A" },
+  blogBadge: { backgroundColor: "#8B7CDB" },
+  naverBadgeText: { fontSize: 12, fontWeight: "800", color: Palette.white },
+  sourceLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Palette.inkFaint,
+    marginBottom: 2,
+  },
+  sourceValueText: { fontSize: 14, fontWeight: "700", color: Palette.ink },
   totalRating: {
     fontSize: 30,
     fontWeight: "700",

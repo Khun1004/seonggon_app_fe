@@ -18,7 +18,11 @@ import { ReviewContext } from "@/components/contexts/ReviewContext";
 import {
   BlogReviewItem,
   getBlogReviews,
+  getReviewStats,
+  getStoreProfile,
   resolvePhotoUrl,
+  ReviewStats,
+  StoreProfile,
 } from "@/constants/api";
 import { NAVER_REVIEW_URL } from "@/constants/store";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
@@ -104,9 +108,19 @@ export default function Reviews() {
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0); // 0: 좋았어요, 1: 메뉴별 평점
 
+  // 앱 리뷰 통계 + 가게 정보(네이버 평점·블로그 리뷰 수) — 관리자가 입력한 값
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const [profile, setProfile] = useState<StoreProfile | null>(null);
+
   // 화면에 들어올 때마다 최신 리뷰를 다시 불러옵니다.
   useEffect(() => {
     refreshReviews();
+    getReviewStats()
+      .then(setReviewStats)
+      .catch(() => {});
+    getStoreProfile()
+      .then(setProfile)
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -325,17 +339,78 @@ export default function Reviews() {
           { paddingBottom: 120, paddingTop: 40 },
         ]}
       >
-        {/* Overview */}
+        {/* Overview — 앱 / 네이버 방문자 / 네이버 블로그, 3곳을 따로 보여줘요 */}
         <View style={styles.overviewCard}>
           <Text style={styles.overviewTitle}>성공식당 평점</Text>
-          <View style={styles.overviewScoreRow}>
-            <Text style={styles.overviewScore}>4.8</Text>
-            <Text style={styles.overviewScoreSub}>/ 5</Text>
+
+          <View style={styles.sourceRow}>
+            <View style={[styles.sourceBadge, styles.appBadge]}>
+              <Ionicons name="restaurant" size={13} color={Palette.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sourceLabel}>앱 방문자 리뷰</Text>
+              <View style={styles.sourceValueRow}>
+                <Text style={styles.sourceScore}>
+                  {reviewStats ? reviewStats.averageRating.toFixed(2) : "-"}
+                </Text>
+                <StarRow
+                  rating={reviewStats ? reviewStats.averageRating : 0}
+                  size={12}
+                />
+              </View>
+              <Text style={styles.sourceCount}>
+                리뷰{" "}
+                {reviewStats ? reviewStats.totalCount.toLocaleString() : "-"}개
+              </Text>
+            </View>
           </View>
-          <StarRow rating={4.5} size={20} />
-          <Text style={styles.overviewCount}>
-            최근 120개의 방문자 평가 기준
-          </Text>
+
+          {profile?.naverRating != null && (
+            <>
+              <View style={styles.sourceDivider} />
+              <View style={styles.sourceRow}>
+                <View style={[styles.sourceBadge, styles.naverBadge]}>
+                  <Text style={styles.naverBadgeText}>N</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sourceLabel}>네이버 방문자 리뷰</Text>
+                  <View style={styles.sourceValueRow}>
+                    <Text style={styles.sourceScore}>
+                      {profile.naverRating.toFixed(2)}
+                    </Text>
+                    <StarRow rating={profile.naverRating} size={12} />
+                  </View>
+                  {profile.naverReviewCount != null && (
+                    <Text style={styles.sourceCount}>
+                      리뷰 {profile.naverReviewCount.toLocaleString()}개
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </>
+          )}
+
+          {profile?.blogReviewCount != null && (
+            <>
+              <View style={styles.sourceDivider} />
+              <View style={styles.sourceRow}>
+                <View style={[styles.sourceBadge, styles.blogBadge]}>
+                  <Ionicons
+                    name="document-text"
+                    size={13}
+                    color={Palette.white}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sourceLabel}>네이버 블로그 리뷰</Text>
+                  <Text style={styles.sourceCount}>
+                    {profile.blogReviewCount.toLocaleString()}개의 포스트
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+
           <TouchableOpacity
             style={styles.naverReviewBtn}
             onPress={() => Linking.openURL(NAVER_REVIEW_URL).catch(() => {})}
@@ -615,49 +690,71 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.lg,
     marginTop: -28,
     borderRadius: Radius.lg,
-    alignItems: "center",
     paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
     ...Shadow.card,
   },
   overviewTitle: {
     fontSize: 13,
     color: Palette.inkSoft,
     fontWeight: "600",
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
+    textAlign: "center",
   },
-  overviewScoreRow: {
+  sourceRow: {
     flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: Spacing.sm,
+    alignItems: "center",
+    gap: Spacing.sm + 4,
   },
-  overviewScore: {
-    fontSize: 36,
+  sourceDivider: {
+    height: 1,
+    backgroundColor: Palette.line,
+    marginVertical: Spacing.sm + 4,
+  },
+  sourceBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appBadge: { backgroundColor: Palette.amberDeep },
+  naverBadge: { backgroundColor: "#03C75A" },
+  blogBadge: { backgroundColor: "#8B7CDB" },
+  naverBadgeText: { fontSize: 14, fontWeight: "800", color: Palette.white },
+  sourceLabel: {
+    fontSize: 12,
     fontWeight: "700",
+    color: Palette.inkSoft,
+    marginBottom: 3,
+  },
+  sourceValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sourceScore: {
+    fontSize: 18,
+    fontWeight: "800",
     color: Palette.ink,
   },
-  overviewScoreSub: {
-    fontSize: 16,
+  sourceCount: {
+    fontSize: 11.5,
     color: Palette.inkFaint,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  overviewCount: {
-    fontSize: 12,
-    color: Palette.inkFaint,
-    marginTop: Spacing.sm,
+    marginTop: 2,
   },
   naverReviewBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    marginTop: Spacing.md,
+    marginTop: Spacing.lg,
     paddingVertical: Spacing.sm + 2,
     paddingHorizontal: Spacing.lg,
     borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Palette.line,
-    backgroundColor: Palette.white,
+    backgroundColor: Palette.creamDim,
   },
   naverReviewBtnText: {
     fontSize: 13,

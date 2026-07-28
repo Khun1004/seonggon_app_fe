@@ -1,24 +1,66 @@
 // components/Visit/VisitHistory.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useContext, useEffect } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useContext, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
+import { useAuth } from "@/components/contexts/AuthContext";
 import { useProfile } from "@/components/contexts/ProfileContext";
 import { TOTAL_STAMPS, VisitContext } from "@/components/contexts/VisitContext";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 export default function VisitHistory() {
-  const { visitCount, visitRecords, refreshVisits } = useContext(VisitContext);
+  const { visitCount, visitRecords, canClaim, refreshVisits, claimReward } =
+    useContext(VisitContext);
   const { profile } = useProfile();
+  const { user } = useAuth();
+  const [claiming, setClaiming] = useState(false);
 
   // 저장된 전화번호 기준으로 확정된 예약 = 방문 도장을 서버에서 불러옵니다.
+  // 로그인 정보가 있으면 내 리뷰 목록과 도장 사용 현황도 같이 불러와서,
+  // 어떤 방문에 리뷰를 남겼는지 + 지금 혜택을 받을 수 있는지까지 정확히 표시해요.
   useEffect(() => {
-    if (profile?.phone) refreshVisits(profile.phone);
+    if (profile?.phone) refreshVisits(profile.phone, user?.loginId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.phone]);
+  }, [profile?.phone, user?.loginId]);
 
   // 도장 아래 작은 날짜를 보여주기 위해 오래된 순으로 다시 정렬
   const chronological = [...visitRecords].reverse();
+
+  const handleUseReward = () => {
+    if (!profile?.phone || !user?.loginId) {
+      Alert.alert("알림", "로그인 후 이용해 주세요.");
+      return;
+    }
+    Alert.alert(
+      "혜택 사용",
+      "매장 직원에게 이 화면을 보여주시면 해물파전을 받으실 수 있어요!",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "사용 확인",
+          onPress: async () => {
+            setClaiming(true);
+            try {
+              await claimReward(profile.phone, user.loginId);
+              Alert.alert("알림", "혜택이 사용 처리되었습니다. 맛있게 드세요!");
+            } catch (e: any) {
+              Alert.alert("알림", e.message || "혜택 사용에 실패했습니다.");
+            } finally {
+              setClaiming(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -29,7 +71,7 @@ export default function VisitHistory() {
         {/* Stamp progress */}
         <View style={styles.stampCard}>
           <Text style={styles.stampCardTitle}>
-            {visitCount >= TOTAL_STAMPS
+            {canClaim
               ? "도장을 모두 모으셨어요!"
               : `${TOTAL_STAMPS - visitCount}번 더 방문하면 혜택을 받아요`}
           </Text>
@@ -71,6 +113,23 @@ export default function VisitHistory() {
               5번 방문 완료 시 해물파전 서비스 증정
             </Text>
           </View>
+
+          {canClaim && (
+            <TouchableOpacity
+              style={[styles.useRewardBtn, claiming && { opacity: 0.6 }]}
+              onPress={handleUseReward}
+              disabled={claiming}
+            >
+              {claiming ? (
+                <ActivityIndicator color={Palette.white} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="gift" size={16} color={Palette.white} />
+                  <Text style={styles.useRewardBtnText}>사용하기</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.noticeBox}>
@@ -238,6 +297,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: Palette.amberDeep,
+  },
+  useRewardBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#B23A2E",
+    paddingVertical: Spacing.sm + 6,
+    borderRadius: Radius.sm,
+    marginTop: Spacing.sm + 4,
+  },
+  useRewardBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Palette.white,
   },
   noticeBox: {
     flexDirection: "row",

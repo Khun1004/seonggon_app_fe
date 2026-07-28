@@ -105,8 +105,8 @@ export default function AdminHome() {
     {
       icon: "book-outline",
       label: "성공식당의 상세",
-      sub: "소개, 성공식당의 맛 문구를 수정해요",
-      onPress: () => router.push("/admin/info" as any),
+      sub: "영업시간·주소·전화번호 수정, 휴무일 등록",
+      onPress: () => router.push("/admin/store-profile" as any),
     },
     {
       icon: "location-outline",

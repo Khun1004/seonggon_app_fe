@@ -1,8 +1,9 @@
 // app/(tabs)/index.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,46 +20,66 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 
 import BeforeYouVisit from "@/components/Home/BeforeYouVisit";
-import { getNearbySpots, NearbySpot } from "@/constants/api";
+import { MenuContext } from "@/components/contexts/MenuContext";
+import {
+  ClosedDate,
+  getNearbySpots,
+  getReviewStats,
+  getStoreProfile,
+  getUpcomingClosedDates,
+  NearbySpot,
+  ReviewStats,
+  StoreProfile,
+} from "@/constants/api";
+import { resolveImageSource } from "@/constants/menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
-
-const RESTAURANT_ADDRESS = "대구 동구 팔공산로199길 12";
-const RESTAURANT_PHONE = "0507-1410-7634";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
-// 요일별 영업시간 — HomeInfo.tsx와 동일한 데이터를 공유합니다.
-// 요일이 다 똑같다면(매일 11:00~21:00) 이 배열의 각 day 값만 같게 두면 되고,
-// 휴무일이나 다른 시간이 있으면 그 요일만 다르게 바꿔주세요.
-const OPEN_HOUR = 11;
-const OPEN_MINUTE = 0;
-const CLOSE_HOUR = 21;
-const CLOSE_MINUTE = 0;
-const LAST_ORDER_TEXT = "19:30 라스트오더";
-
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
-function getBusinessStatus() {
+function toDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function timeStrToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 관리자가 등록한 실제 영업시간·휴무일을 기준으로 영업 상태를 계산합니다.
+// profile/closedDates를 아직 못 불러왔으면 일단 "영업중"으로 보여주고,
+// 데이터가 오면 바로 갱신돼요.
+function getBusinessStatus(
+  profile: StoreProfile | null,
+  closedDates: ClosedDate[],
+) {
   const now = new Date();
   const todayLabel = WEEKDAY_LABELS[now.getDay()];
+  const todayStr = toDateStr(now);
 
-  const openMinutes = OPEN_HOUR * 60 + OPEN_MINUTE;
-  const closeMinutes = CLOSE_HOUR * 60 + CLOSE_MINUTE;
+  const isClosedToday = closedDates.some((c) => c.date === todayStr);
+
+  if (isClosedToday) {
+    return {
+      isOpen: false,
+      isHoliday: true,
+      todayLabel,
+      timeRangeText: "휴무",
+    };
+  }
+
+  if (!profile) {
+    return { isOpen: true, isHoliday: false, todayLabel, timeRangeText: "" };
+  }
+
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
+  const openMinutes = timeStrToMinutes(profile.openTime);
+  const closeMinutes = timeStrToMinutes(profile.closeTime);
   const isOpen = nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  const timeRangeText = `${profile.openTime} - ${profile.closeTime}`;
 
-  const timeRangeText = `${String(OPEN_HOUR).padStart(2, "0")}:${String(
-    OPEN_MINUTE,
-  ).padStart(2, "0")} - ${String(CLOSE_HOUR).padStart(2, "0")}:${String(
-    CLOSE_MINUTE,
-  ).padStart(2, "0")}`;
-
-  return {
-    isOpen,
-    todayLabel,
-    timeRangeText,
-  };
+  return { isOpen, isHoliday: false, todayLabel, timeRangeText };
 }
 
 const CATEGORIES: {
@@ -120,30 +141,6 @@ const CATEGORIES: {
     iconColor: "#6B3FA0",
     textColor: "#6B3FA0",
     borderColor: "#C6A6EA",
-  },
-];
-
-const RECOMMENDED_FOODS = [
-  {
-    id: "b1",
-    name: "능이오리백숙",
-    image: require("../../assets/images/능이오리백수.jpeg"),
-    price: "69,000원",
-    rating: "4.9",
-  },
-  {
-    id: "g1",
-    name: "산더미 오리간장불고기",
-    image: require("../../assets/images/산더미오리간장불고기.jpeg"),
-    price: "54,000원",
-    rating: "4.8",
-  },
-  {
-    id: "s1",
-    name: "해물파전",
-    image: require("../../assets/images/해물파전.jpeg"),
-    price: "15,000원",
-    rating: "4.7",
   },
 ];
 
@@ -254,35 +251,64 @@ function HorizontalBarChart() {
 export default function HomeScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [businessStatus, setBusinessStatus] = useState(getBusinessStatus());
   const [nearbySpots, setNearbySpots] = useState<NearbySpot[]>([]);
   const [spotsLoading, setSpotsLoading] = useState(true);
+  const [profile, setProfile] = useState<StoreProfile | null>(null);
+  const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const {
+    menuData,
+    loading: menuLoading,
+    refreshMenu,
+  } = useContext(MenuContext);
 
-  // 팔공산 근처 명소는 서버에서 불러와요 — 나중에 사장님이 DB에 사진 주소만
-  // 넣어주면 앱을 다시 빌드하지 않아도 바로 반영됩니다.
-  useEffect(() => {
+  // 관리자가 메뉴 관리에서 "인기 메뉴 뱃지"를 켠 메뉴들을 그대로 "추천 메뉴"로
+  // 보여줘요 — 카테고리 상관없이 전부 모아서, 최대 6개까지만 보여줍니다.
+  const recommendedItems = Object.values(menuData)
+    .flat()
+    .filter((item) => item.isHot)
+    .slice(0, 6);
+
+  const load = useCallback(() => {
     getNearbySpots()
       .then(setNearbySpots)
       .catch(() => {})
       .finally(() => setSpotsLoading(false));
-  }, []);
 
-  // 1분마다 영업 상태를 다시 계산 — 화면을 켜둔 채로 영업 시작/종료 시각을
-  // 지나가도 자동으로 배지가 갱신됩니다.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setBusinessStatus(getBusinessStatus());
-    }, 60 * 1000);
-    return () => clearInterval(timer);
-  }, []);
+    getStoreProfile()
+      .then(setProfile)
+      .catch(() => {});
+
+    getUpcomingClosedDates()
+      .then(setClosedDates)
+      .catch(() => {});
+
+    getReviewStats()
+      .then(setReviewStats)
+      .catch(() => {});
+
+    refreshMenu();
+  }, [refreshMenu]);
+
+  // 이 화면에 들어올 때마다 새로 불러와요 — 관리자가 방금 영업시간, 휴무일,
+  // 리뷰 통계 등을 바꿨어도 앱을 껐다 켜지 않고 바로 반영돼요.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const businessStatus = getBusinessStatus(profile, closedDates);
 
   const copyToClipboard = async () => {
-    await Clipboard.setStringAsync(RESTAURANT_ADDRESS);
+    if (!profile) return;
+    await Clipboard.setStringAsync(profile.address);
     Alert.alert("알림", "주소가 클립보드에 복사되었습니다.");
   };
 
   const makeCall = () => {
-    Linking.openURL(`tel:${RESTAURANT_PHONE}`).catch(() => {
+    if (!profile) return;
+    Linking.openURL(`tel:${profile.phone}`).catch(() => {
       Alert.alert("에러", "전화 걸기 기능을 실행할 수 없습니다.");
     });
   };
@@ -316,7 +342,11 @@ export default function HomeScreen() {
                     !businessStatus.isOpen && styles.statusBadgeTextClosed,
                   ]}
                 >
-                  {businessStatus.isOpen ? "영업중" : "영업종료"}
+                  {businessStatus.isHoliday
+                    ? "휴무"
+                    : businessStatus.isOpen
+                      ? "영업중"
+                      : "영업종료"}
                 </Text>
               </View>
             </View>
@@ -326,7 +356,9 @@ export default function HomeScreen() {
               백숙 · 삼계탕 · 30년 전통의 깊이
             </Text>
             <Text style={styles.heroHoursText}>
-              {businessStatus.todayLabel}요일 {businessStatus.timeRangeText}
+              {businessStatus.isHoliday
+                ? "오늘은 휴무일이에요"
+                : `${businessStatus.todayLabel}요일 ${businessStatus.timeRangeText}`}
             </Text>
 
             <TouchableOpacity
@@ -349,13 +381,54 @@ export default function HomeScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.summaryStatRow}>
+            <View style={styles.sourceTag}>
+              <Text style={styles.sourceTagText}>앱</Text>
+            </View>
             <Ionicons name="star" size={14} color={Palette.gold} />
-            <Text style={styles.summaryStatText}>4.73</Text>
+            <Text style={styles.summaryStatText}>
+              {reviewStats ? reviewStats.averageRating.toFixed(2) : "-"}
+            </Text>
             <Text style={styles.summaryStatDivider}>|</Text>
-            <Text style={styles.summaryStatText}>방문자 리뷰 2,475</Text>
-            <Text style={styles.summaryStatDivider}>|</Text>
-            <Text style={styles.summaryStatText}>블로그 1,046</Text>
+            <Text style={styles.summaryStatText}>
+              방문자 리뷰{" "}
+              {reviewStats ? reviewStats.totalCount.toLocaleString() : "-"}
+            </Text>
           </View>
+
+          {(profile?.naverRating != null ||
+            profile?.blogReviewCount != null) && (
+            <View style={[styles.summaryStatRow, { marginTop: 6 }]}>
+              <View style={[styles.sourceTag, styles.sourceTagNaver]}>
+                <Text style={styles.sourceTagText}>N</Text>
+              </View>
+              {profile?.naverRating != null && (
+                <>
+                  <Ionicons name="star" size={14} color={Palette.gold} />
+                  <Text style={styles.summaryStatText}>
+                    {profile.naverRating.toFixed(2)}
+                  </Text>
+                  {profile.naverReviewCount != null && (
+                    <>
+                      <Text style={styles.summaryStatDivider}>|</Text>
+                      <Text style={styles.summaryStatText}>
+                        방문자 리뷰 {profile.naverReviewCount.toLocaleString()}
+                      </Text>
+                    </>
+                  )}
+                </>
+              )}
+              {profile?.blogReviewCount != null && (
+                <>
+                  {profile?.naverRating != null && (
+                    <Text style={styles.summaryStatDivider}>|</Text>
+                  )}
+                  <Text style={styles.summaryStatText}>
+                    블로그 {profile.blogReviewCount.toLocaleString()}
+                  </Text>
+                </>
+              )}
+            </View>
+          )}
 
           <View style={[styles.summaryStatRow, { marginTop: 6 }]}>
             <Ionicons
@@ -380,7 +453,9 @@ export default function HomeScreen() {
                 size={14}
                 color={Palette.amberDeep}
               />
-              <Text style={styles.summaryContactText}>팔공산로 199길 12</Text>
+              <Text style={styles.summaryContactText}>
+                {profile?.address ?? "주소 불러오는 중..."}
+              </Text>
               <Ionicons
                 name="copy-outline"
                 size={11}
@@ -396,7 +471,9 @@ export default function HomeScreen() {
                 size={14}
                 color={Palette.amberDeep}
               />
-              <Text style={styles.summaryContactText}>{RESTAURANT_PHONE}</Text>
+              <Text style={styles.summaryContactText}>
+                {profile?.phone ?? "-"}
+              </Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
             <TouchableOpacity
@@ -466,46 +543,71 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {RECOMMENDED_FOODS.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.foodCard}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push({
-                  pathname: "/menu-detail",
-                  params: { id: item.id },
-                } as any)
-              }
-            >
-              <Image source={item.image} style={styles.foodImage} />
-              <View style={styles.foodInfo}>
-                <View style={styles.foodHeader}>
-                  <Text style={styles.foodName}>{item.name}</Text>
-                  <View style={styles.ratingPill}>
-                    <Ionicons name="star" size={11} color={Palette.gold} />
-                    <Text style={styles.foodRating}>{item.rating}</Text>
-                  </View>
-                </View>
-                <View style={styles.foodPriceRow}>
-                  <Text style={styles.foodPrice}>{item.price}</Text>
-                  <View style={styles.repBadge}>
-                    <Text style={styles.repBadgeText}>대표</Text>
-                  </View>
-                </View>
-                <View style={styles.foodFooter}>
-                  <View style={{ flex: 1 }} />
-                  <View style={styles.chevronButton}>
+          {menuLoading ? (
+            <ActivityIndicator
+              color={Palette.amberDeep}
+              style={{ marginVertical: Spacing.lg }}
+            />
+          ) : recommendedItems.length === 0 ? (
+            <Text style={styles.emptyRecommendText}>
+              아직 등록된 추천 메뉴가 없어요. 관리자 메뉴 관리에서 "인기 메뉴
+              뱃지"를 켜면 여기에 나와요.
+            </Text>
+          ) : (
+            recommendedItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.foodCard}
+                activeOpacity={0.85}
+                onPress={() =>
+                  router.push({
+                    pathname: "/menu-detail",
+                    params: { id: item.id },
+                  } as any)
+                }
+              >
+                {item.image ? (
+                  <Image
+                    source={resolveImageSource(item.image)}
+                    style={styles.foodImage}
+                  />
+                ) : (
+                  <View style={[styles.foodImage, styles.foodImagePlaceholder]}>
                     <Ionicons
-                      name="chevron-forward"
-                      size={16}
-                      color={Palette.white}
+                      name="restaurant-outline"
+                      size={24}
+                      color={Palette.inkFaint}
                     />
                   </View>
+                )}
+                <View style={styles.foodInfo}>
+                  <View style={styles.foodHeader}>
+                    <Text style={styles.foodName}>{item.name}</Text>
+                    <View style={styles.ratingPill}>
+                      <Ionicons name="flame" size={11} color={Palette.gold} />
+                      <Text style={styles.foodRating}>인기</Text>
+                    </View>
+                  </View>
+                  <View style={styles.foodPriceRow}>
+                    <Text style={styles.foodPrice}>{item.price}</Text>
+                    <View style={styles.repBadge}>
+                      <Text style={styles.repBadgeText}>대표</Text>
+                    </View>
+                  </View>
+                  <View style={styles.foodFooter}>
+                    <View style={{ flex: 1 }} />
+                    <View style={styles.chevronButton}>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={Palette.white}
+                      />
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Sales Chart */}
@@ -711,6 +813,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  sourceTag: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: Palette.amberDeep,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sourceTagNaver: { backgroundColor: "#03C75A" },
+  sourceTagText: { fontSize: 9, fontWeight: "800", color: Palette.white },
   summaryStatText: {
     fontSize: 12,
     fontWeight: "600",
@@ -910,6 +1022,17 @@ const styles = StyleSheet.create({
     width: 92,
     height: 92,
     borderRadius: Radius.md,
+  },
+  foodImagePlaceholder: {
+    backgroundColor: Palette.creamDim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyRecommendText: {
+    fontSize: 12.5,
+    color: Palette.inkFaint,
+    lineHeight: 18,
+    paddingVertical: Spacing.md,
   },
   foodInfo: {
     flex: 1,
