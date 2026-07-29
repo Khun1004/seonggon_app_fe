@@ -237,6 +237,7 @@ export type ServerReview = {
   rating: number;
   text: string;
   menuName?: string;
+  reservationId?: number; // ← 이 줄 추가
   keywords: string[];
   photos: string[];
   likes: number;
@@ -252,6 +253,7 @@ export type CreateReviewPayload = {
   rating: number;
   text: string;
   menuName?: string;
+  reservationId?: number; // ← 이 줄 추가
   keywords?: string[];
   photos?: string[];
   rewardEligible?: boolean;
@@ -376,7 +378,7 @@ export type ServerReservation = {
   menus?: Record<string, number>;
   takeoutMenus?: Record<string, number>;
   status: "CONFIRMED" | "CANCELLED";
-  paymentStatus: "UNPAID" | "PAID";
+  paymentStatus: "UNPAID" | "PAID" | "REFUNDED";
   paymentMethod?: string;
   paidAmount: number;
   paidAt?: number;
@@ -593,6 +595,7 @@ export type StoreProfile = {
   naverRating?: number;
   naverReviewCount?: number;
   blogReviewCount?: number;
+  allowWeekendReservations?: boolean;
 };
 
 export type ClosedDate = {
@@ -674,4 +677,124 @@ export async function claimVisitStampReward(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || "혜택 사용에 실패했습니다.");
   return data as VisitStampStatus;
+}
+
+export type VisitRewardClaimRecord = {
+  id: number;
+  claimedAt: string;
+  visitDates: string[]; // 이 회차에 쓰인 방문 날짜들 (오래된 순)
+};
+
+export async function getVisitStampHistory(
+  phone: string,
+  loginId: string,
+): Promise<VisitRewardClaimRecord[]> {
+  const res = await fetch(
+    `${BASE_URL}/api/rewards/visit-stamp/history?phone=${encodeURIComponent(phone)}&loginId=${encodeURIComponent(loginId)}`,
+  );
+  if (!res.ok) throw new Error("사용 내역을 불러오지 못했습니다.");
+  return (await res.json()) as VisitRewardClaimRecord[];
+}
+
+// ── 쿠폰 (사장님이 관리자 화면에서 등록) ────────────────
+export type Coupon = {
+  id: number;
+  title: string;
+  subtitle: string;
+  icon: string;
+  count?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getCoupons(): Promise<Coupon[]> {
+  const res = await fetch(`${BASE_URL}/api/coupons`);
+  if (!res.ok) throw new Error("쿠폰 목록을 불러오지 못했습니다.");
+  return (await res.json()) as Coupon[];
+}
+
+// ── 리뷰 작성법 단계 안내 ────────────────
+export type ReviewGuideStep = {
+  id: number;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getReviewGuideSteps(): Promise<ReviewGuideStep[]> {
+  const res = await fetch(`${BASE_URL}/api/review-guide`);
+  if (!res.ok) throw new Error("리뷰 작성법을 불러오지 못했습니다.");
+  return (await res.json()) as ReviewGuideStep[];
+}
+
+// ── 리뷰 작성 화면의 "이런 점이 좋았어요" 선택지 ────────────
+export type ReviewGoodPointOption = {
+  id: number;
+  emoji: string;
+  label: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getReviewGoodPointOptions(): Promise<
+  ReviewGoodPointOption[]
+> {
+  const res = await fetch(`${BASE_URL}/api/review-good-points`);
+  if (!res.ok) throw new Error("선택지를 불러오지 못했습니다.");
+  return (await res.json()) as ReviewGoodPointOption[];
+}
+
+export type CouponNotice = {
+  content: string; // 줄바꿈(\n)으로 구분된 안내 항목들
+};
+
+export async function getCouponNotice(): Promise<CouponNotice> {
+  const res = await fetch(`${BASE_URL}/api/coupon-notice`);
+  if (!res.ok) throw new Error("안내 문구를 불러오지 못했습니다.");
+  return (await res.json()) as CouponNotice;
+}
+
+export type ReviewMenuOption = {
+  id: number;
+  name: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getReviewMenuOptions(): Promise<ReviewMenuOption[]> {
+  const res = await fetch(`${BASE_URL}/api/review-menu-options`);
+  if (!res.ok) throw new Error("메뉴 목록을 불러오지 못했습니다.");
+  return (await res.json()) as ReviewMenuOption[];
+}
+
+// ── 방문 도장 설정 (몇 번 방문하면 무엇을 주는지) ────────────
+export type VisitStampSettingsInfo = {
+  requiredVisits: number;
+  rewardName: string;
+};
+
+export async function getVisitStampSettingsInfo(): Promise<VisitStampSettingsInfo> {
+  const res = await fetch(`${BASE_URL}/api/visit-stamp-settings`);
+  if (!res.ok) throw new Error("방문 도장 설정을 불러오지 못했습니다.");
+  return (await res.json()) as VisitStampSettingsInfo;
+}
+
+// ── 리뷰 적립금 교환 가능 메뉴 ────────────
+export type RewardRedeemableItem = {
+  id: number;
+  name: string;
+  price: number;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getRewardRedeemableItems(): Promise<
+  RewardRedeemableItem[]
+> {
+  const res = await fetch(`${BASE_URL}/api/reward-redeemable-items`);
+  if (!res.ok) throw new Error("교환 가능 메뉴를 불러오지 못했습니다.");
+  return (await res.json()) as RewardRedeemableItem[];
 }

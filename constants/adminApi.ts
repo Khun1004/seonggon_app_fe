@@ -44,7 +44,7 @@ export type AdminReservation = {
   menus: Record<string, number>;
   takeoutMenus?: Record<string, number>;
   status: "CONFIRMED" | "CANCELLED";
-  paymentStatus: "UNPAID" | "PAID";
+  paymentStatus: "UNPAID" | "PAID" | "REFUNDED";
   paymentMethod?: string;
   paidAmount?: number;
   paidAt?: number;
@@ -166,6 +166,7 @@ export type AdminStoreProfile = {
   naverRating?: number;
   naverReviewCount?: number;
   blogReviewCount?: number;
+  allowWeekendReservations?: boolean;
 };
 
 export type UpsertStoreProfilePayload = {
@@ -177,6 +178,7 @@ export type UpsertStoreProfilePayload = {
   naverRating?: number;
   naverReviewCount?: number;
   blogReviewCount?: number;
+  allowWeekendReservations?: boolean;
 };
 
 export type AdminClosedDate = {
@@ -319,4 +321,523 @@ export async function updateAdminReservationTimeConfig(
   });
   if (!res.ok) throw new Error("예약 시간 설정 저장에 실패했습니다.");
   return (await res.json()) as ReservationTimeConfig;
+}
+
+export async function markReservationPaidAsAdmin(
+  id: number,
+  paymentMethod: string,
+  amount: number,
+  adminPassword: string,
+): Promise<AdminReservation> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reservations/${id}/mark-paid`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Password": adminPassword,
+      },
+      body: JSON.stringify({ paymentMethod, amount }),
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "결제 처리에 실패했습니다.");
+  return data as AdminReservation;
+}
+
+export type CreateReservationAsAdminPayload = {
+  roomId: string;
+  roomLabel: string;
+  type: "DINE_IN" | "TAKEOUT";
+  date: string;
+  time: string;
+  name: string;
+  phone: string;
+  peopleCount: number;
+  message?: string;
+  menus?: Record<string, number>;
+};
+
+export async function createReservationAsAdmin(
+  payload: CreateReservationAsAdminPayload,
+  adminPassword: string,
+): Promise<AdminReservation> {
+  const res = await fetch(`${BASE_URL}/api/admin/reservations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "예약 등록에 실패했습니다.");
+  return data as AdminReservation;
+}
+
+export async function updateReservationAsAdmin(
+  id: number,
+  payload: CreateReservationAsAdminPayload,
+  adminPassword: string,
+): Promise<AdminReservation> {
+  const res = await fetch(`${BASE_URL}/api/admin/reservations/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "예약 수정에 실패했습니다.");
+  return data as AdminReservation;
+}
+
+// ── 쿠폰 관리 ────────────────
+export type AdminCoupon = {
+  id: number;
+  title: string;
+  subtitle: string;
+  icon: string;
+  count?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertCouponPayload = {
+  title: string;
+  subtitle: string;
+  icon: string;
+  count?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminCoupons(
+  adminPassword: string,
+): Promise<AdminCoupon[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/coupons`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("쿠폰 목록을 불러오지 못했습니다.");
+  return (await res.json()) as AdminCoupon[];
+}
+
+export async function createAdminCoupon(
+  payload: UpsertCouponPayload,
+  adminPassword: string,
+): Promise<AdminCoupon> {
+  const res = await fetch(`${BASE_URL}/api/admin/coupons`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("쿠폰 등록에 실패했습니다.");
+  return (await res.json()) as AdminCoupon;
+}
+
+export async function updateAdminCoupon(
+  id: number,
+  payload: UpsertCouponPayload,
+  adminPassword: string,
+): Promise<AdminCoupon> {
+  const res = await fetch(`${BASE_URL}/api/admin/coupons/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("쿠폰 수정에 실패했습니다.");
+  return (await res.json()) as AdminCoupon;
+}
+
+export async function deleteAdminCoupon(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/coupons/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("쿠폰 삭제에 실패했습니다.");
+}
+
+// ── 리뷰 작성법 관리 ────────────────
+export type AdminReviewGuideStep = {
+  id: number;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertReviewGuideStepPayload = {
+  title: string;
+  description: string;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminReviewGuideSteps(
+  adminPassword: string,
+): Promise<AdminReviewGuideStep[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-guide`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("리뷰 작성법을 불러오지 못했습니다.");
+  return (await res.json()) as AdminReviewGuideStep[];
+}
+
+export async function createAdminReviewGuideStep(
+  payload: UpsertReviewGuideStepPayload,
+  adminPassword: string,
+): Promise<AdminReviewGuideStep> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-guide`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminReviewGuideStep;
+}
+
+export async function updateAdminReviewGuideStep(
+  id: number,
+  payload: UpsertReviewGuideStepPayload,
+  adminPassword: string,
+): Promise<AdminReviewGuideStep> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-guide/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminReviewGuideStep;
+}
+
+export async function deleteAdminReviewGuideStep(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-guide/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+// ── 리뷰 "이런 점이 좋았어요" 선택지 관리 ────────────────
+export type AdminReviewGoodPointOption = {
+  id: number;
+  emoji: string;
+  label: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertReviewGoodPointOptionPayload = {
+  emoji: string;
+  label: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminReviewGoodPointOptions(
+  adminPassword: string,
+): Promise<AdminReviewGoodPointOption[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-good-points`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("선택지를 불러오지 못했습니다.");
+  return (await res.json()) as AdminReviewGoodPointOption[];
+}
+
+export async function createAdminReviewGoodPointOption(
+  payload: UpsertReviewGoodPointOptionPayload,
+  adminPassword: string,
+): Promise<AdminReviewGoodPointOption> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-good-points`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminReviewGoodPointOption;
+}
+
+export async function updateAdminReviewGoodPointOption(
+  id: number,
+  payload: UpsertReviewGoodPointOptionPayload,
+  adminPassword: string,
+): Promise<AdminReviewGoodPointOption> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-good-points/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminReviewGoodPointOption;
+}
+
+export async function deleteAdminReviewGoodPointOption(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-good-points/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+export type AdminCouponNotice = {
+  content: string;
+};
+
+export async function getAdminCouponNotice(
+  adminPassword: string,
+): Promise<AdminCouponNotice> {
+  const res = await fetch(`${BASE_URL}/api/admin/coupon-notice`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("안내 문구를 불러오지 못했습니다.");
+  return (await res.json()) as AdminCouponNotice;
+}
+
+export async function updateAdminCouponNotice(
+  content: string,
+  adminPassword: string,
+): Promise<AdminCouponNotice> {
+  const res = await fetch(`${BASE_URL}/api/admin/coupon-notice`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("안내 문구 저장에 실패했습니다.");
+  return (await res.json()) as AdminCouponNotice;
+}
+
+// ── 리뷰 메뉴 목록 관리 ────────────
+export type AdminReviewMenuOption = {
+  id: number;
+  name: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertReviewMenuOptionPayload = {
+  name: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminReviewMenuOptions(
+  adminPassword: string,
+): Promise<AdminReviewMenuOption[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-menu-options`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("메뉴 목록을 불러오지 못했습니다.");
+  return (await res.json()) as AdminReviewMenuOption[];
+}
+
+export async function createAdminReviewMenuOption(
+  payload: UpsertReviewMenuOptionPayload,
+  adminPassword: string,
+): Promise<AdminReviewMenuOption> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-menu-options`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminReviewMenuOption;
+}
+
+export async function updateAdminReviewMenuOption(
+  id: number,
+  payload: UpsertReviewMenuOptionPayload,
+  adminPassword: string,
+): Promise<AdminReviewMenuOption> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-menu-options/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminReviewMenuOption;
+}
+
+export async function deleteAdminReviewMenuOption(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/review-menu-options/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+// ── 방문 도장 설정 관리 ────────────
+export type AdminVisitStampSettings = {
+  requiredVisits: number;
+  rewardName: string;
+};
+
+export type UpsertVisitStampSettingsPayload = {
+  requiredVisits: number;
+  rewardName: string;
+};
+
+export async function getAdminVisitStampSettings(
+  adminPassword: string,
+): Promise<AdminVisitStampSettings> {
+  const res = await fetch(`${BASE_URL}/api/admin/visit-stamp-settings`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("설정을 불러오지 못했습니다.");
+  return (await res.json()) as AdminVisitStampSettings;
+}
+
+export async function updateAdminVisitStampSettings(
+  payload: UpsertVisitStampSettingsPayload,
+  adminPassword: string,
+): Promise<AdminVisitStampSettings> {
+  const res = await fetch(`${BASE_URL}/api/admin/visit-stamp-settings`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("저장에 실패했습니다.");
+  return (await res.json()) as AdminVisitStampSettings;
+}
+
+// ── 리뷰 적립금 교환 메뉴 관리 ────────────
+export type AdminRewardRedeemableItem = {
+  id: number;
+  name: string;
+  price: number;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertRewardRedeemableItemPayload = {
+  name: string;
+  price: number;
+  imageUrl?: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminRewardRedeemableItems(
+  adminPassword: string,
+): Promise<AdminRewardRedeemableItem[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/reward-redeemable-items`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("메뉴 목록을 불러오지 못했습니다.");
+  return (await res.json()) as AdminRewardRedeemableItem[];
+}
+
+export async function createAdminRewardRedeemableItem(
+  payload: UpsertRewardRedeemableItemPayload,
+  adminPassword: string,
+): Promise<AdminRewardRedeemableItem> {
+  const res = await fetch(`${BASE_URL}/api/admin/reward-redeemable-items`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminRewardRedeemableItem;
+}
+
+export async function updateAdminRewardRedeemableItem(
+  id: number,
+  payload: UpsertRewardRedeemableItemPayload,
+  adminPassword: string,
+): Promise<AdminRewardRedeemableItem> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reward-redeemable-items/${id}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Password": adminPassword,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminRewardRedeemableItem;
+}
+
+export async function deleteAdminRewardRedeemableItem(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reward-redeemable-items/${id}`,
+    {
+      method: "DELETE",
+      headers: { "X-Admin-Password": adminPassword },
+    },
+  );
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+export async function uploadRewardItemPhoto(
+  imageBase64: string,
+  adminPassword: string,
+): Promise<string> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reward-redeemable-items/upload-photo`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Password": adminPassword,
+      },
+      body: JSON.stringify({ imageBase64 }),
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "사진 업로드에 실패했습니다.");
+  return data.url as string;
 }

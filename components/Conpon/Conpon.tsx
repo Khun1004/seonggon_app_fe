@@ -1,8 +1,10 @@
 // components/Conpon/Conpon.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,22 +12,20 @@ import {
   View,
 } from "react-native";
 
+import { Coupon, getCouponNotice, getCoupons } from "@/constants/api";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
-type CouponItemProps = {
-  title: string;
-  subtitle: string;
-  count?: string;
-  icon: keyof typeof Ionicons.glyphMap;
-};
-
-function CouponItem({ title, subtitle, count, icon }: CouponItemProps) {
+function CouponItem({ title, subtitle, count, icon }: Coupon) {
   return (
     <View style={styles.couponWrapper}>
       <View style={styles.couponContainer}>
         {/* Left icon area */}
         <View style={styles.couponIconArea}>
-          <Ionicons name={icon} size={28} color={Palette.amberDeep} />
+          <Ionicons
+            name={icon as keyof typeof Ionicons.glyphMap}
+            size={28}
+            color={Palette.amberDeep}
+          />
         </View>
 
         {/* Perforated divider */}
@@ -51,6 +51,28 @@ function CouponItem({ title, subtitle, count, icon }: CouponItemProps) {
 
 export default function Conpon() {
   const router = useRouter();
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [noticeLines, setNoticeLines] = useState<string[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      getCoupons()
+        .then(setCoupons)
+        .catch(() => {})
+        .finally(() => setLoading(false));
+      getCouponNotice()
+        .then((n) =>
+          setNoticeLines(
+            n.content
+              .split("\n")
+              .map((l) => l.trim())
+              .filter(Boolean),
+          ),
+        )
+        .catch(() => {});
+    }, []),
+  );
 
   return (
     <View style={styles.container}>
@@ -68,22 +90,23 @@ export default function Conpon() {
 
         {/* Coupon list */}
         <View style={styles.listSection}>
-          <CouponItem
-            title="도토리묵 증정"
-            subtitle="네이버 포토리뷰 작성 시"
-            icon="restaurant-outline"
-          />
-          <CouponItem
-            title="음료 2개 증정"
-            subtitle="네이버 리뷰 작성 시"
-            icon="beer-outline"
-          />
-          <CouponItem
-            title="모둠버섯 추가"
-            subtitle="네이버 포토리뷰 작성 시"
-            count="총 3매 제공"
-            icon="leaf-outline"
-          />
+          {loading ? (
+            <ActivityIndicator
+              color={Palette.amberDeep}
+              style={{ marginVertical: Spacing.xl }}
+            />
+          ) : coupons.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Ionicons
+                name="pricetag-outline"
+                size={28}
+                color={Palette.inkFaint}
+              />
+              <Text style={styles.emptyText}>준비된 쿠폰이 없습니다.</Text>
+            </View>
+          ) : (
+            coupons.map((c) => <CouponItem key={c.id} {...c} />)
+          )}
         </View>
 
         {/* Notice */}
@@ -98,35 +121,12 @@ export default function Conpon() {
           </View>
 
           <View style={styles.noticeList}>
-            <View style={styles.noticeItem}>
-              <Text style={styles.noticeBullet}>•</Text>
-              <Text style={styles.noticeText}>
-                리뷰를 작성하시기 전, 꼭 직원에게{" "}
-                <Text style={styles.bold}>영수증 요청</Text>을 해주세요.
-              </Text>
-            </View>
-            <View style={styles.noticeItem}>
-              <Text style={styles.noticeBullet}>•</Text>
-              <Text style={styles.noticeText}>
-                위 3가지 쿠폰 중 <Text style={styles.bold}>한 가지만 선택</Text>{" "}
-                가능합니다.
-              </Text>
-            </View>
-            <View style={styles.noticeItem}>
-              <Text style={styles.noticeBullet}>•</Text>
-              <Text style={styles.noticeText}>
-                리뷰 작성을 완료한 후,{" "}
-                <Text style={styles.bold}>직원에게 화면을 보여주셔야</Text>{" "}
-                혜택을 받으실 수 있습니다.
-              </Text>
-            </View>
-            <View style={styles.noticeItem}>
-              <Text style={styles.noticeBullet}>•</Text>
-              <Text style={styles.noticeText}>
-                사진이 포함된 <Text style={styles.bold}>포토리뷰</Text>일 때만
-                해당 쿠폰 혜택이 적용됩니다 (음료 제외).
-              </Text>
-            </View>
+            {noticeLines.map((line, idx) => (
+              <View key={idx} style={styles.noticeItem}>
+                <Text style={styles.noticeBullet}>•</Text>
+                <Text style={styles.noticeText}>{line}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -216,6 +216,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     marginTop: Spacing.lg,
   },
+  emptyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xl,
+  },
+  emptyText: { fontSize: 13, color: Palette.inkFaint },
   couponWrapper: {
     marginVertical: Spacing.sm,
     ...Shadow.card,

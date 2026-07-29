@@ -204,8 +204,8 @@ export default function RootLayout() {
                             <Stack.Screen
                               name="recent-reservations"
                               options={screenHeaderOptions(
-                                "RECENT RESERVATIONS",
-                                "최근 예약 내역",
+                                "RESERVATIONS",
+                                "예약 내역",
                               )}
                             />
                             <Stack.Screen

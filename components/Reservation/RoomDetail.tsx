@@ -16,7 +16,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { RoomCategory, RoomsContext } from "@/components/contexts/RoomsContext";
-import { CLOSING_TIME, RESERVATION_TIME_SLOTS } from "@/constants/rooms-data";
+import {
+  getReservationAvailability,
+  getReservationTimeConfig,
+  TakenSlot,
+} from "@/constants/api";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 export default function RoomDetail() {
@@ -28,6 +32,38 @@ export default function RoomDetail() {
   useFocusEffect(
     useCallback(() => {
       refreshRooms();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  // 예약 가능 시간 — 관리자가 "예약 시간 설정"에서 정한 시간표를 그대로
+  // 가져와요. 예약 화면(Reservation.tsx)이랑 항상 같은 시간이 보이도록,
+  // 같은 서버 설정을 씁니다.
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [closeTime, setCloseTime] = useState<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      getReservationTimeConfig("dine-in")
+        .then((config) => {
+          setTimeSlots(config.slots);
+          setCloseTime(config.endTime);
+        })
+        .catch(() => setTimeSlots([]));
+    }, []),
+  );
+
+  // 이 화면은 날짜를 따로 고르지 않고 "오늘 기준"으로 보여주기 때문에,
+  // 오늘 이미 찬 자리를 확인해서 예약 화면이랑 똑같이 회색 처리해요.
+  const todayStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const [takenSlots, setTakenSlots] = useState<TakenSlot[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      getReservationAvailability(todayStr)
+        .then(setTakenSlots)
+        .catch(() => setTakenSlots([]));
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
@@ -63,9 +99,38 @@ export default function RoomDetail() {
   const selectedRoom =
     group.rooms.find((r) => r.id === selectedRoomId) ?? group.rooms[0];
 
+  // 오늘 이미 지난 시간인지 확인해요 — 예약 화면과 같은 기준이에요.
+  const isTimePast = (time: string) => {
+    const [h, m] = time.split(":").map(Number);
+    const slotMinutes = h * 60 + m;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return slotMinutes <= nowMinutes;
+  };
+
+  // 지금 고른 방/좌석 기준으로, 오늘 이미 다른 손님(또는 관리자가 등록한
+  // 예약)에게 찬 시간인지 확인해요.
+  const isTimeTaken = (time: string) =>
+    takenSlots.some(
+      (slot) => slot.roomId === selectedRoom.id && slot.time === time,
+    );
+
   const handleReserve = () => {
     if (!selectedTime) {
       Alert.alert("알림", "먼저 원하시는 시간을 선택해 주세요.");
+      return;
+    }
+    if (isTimePast(selectedTime)) {
+      Alert.alert("알림", "이미 지난 시간이에요. 다른 시간을 선택해 주세요.");
+      setSelectedTime(null);
+      return;
+    }
+    if (isTimeTaken(selectedTime)) {
+      Alert.alert(
+        "알림",
+        "죄송합니다, 그 시간은 이미 다른 손님에게 예약되었어요. 다른 시간을 선택해 주세요.",
+      );
+      setSelectedTime(null);
       return;
     }
     router.push({
@@ -159,7 +224,10 @@ export default function RoomDetail() {
                     <TouchableOpacity
                       key={room.id}
                       style={[styles.chip, active && styles.chipActive]}
-                      onPress={() => setSelectedRoomId(room.id)}
+                      onPress={() => {
+                        setSelectedRoomId(room.id);
+                        setSelectedTime(null);
+                      }}
                     >
                       <Text
                         style={[
@@ -179,22 +247,39 @@ export default function RoomDetail() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>예약 가능 시간</Text>
             <Text style={styles.sectionSubText}>
-              1회 이용은 1시간이며, 매장 마감은 {CLOSING_TIME}입니다.
+              1회 이용은 1시간이며, 매장 마감은 {closeTime ?? "..."}입니다.
             </Text>
             <View style={styles.chipRow}>
-              {RESERVATION_TIME_SLOTS.map((time) => {
+              {timeSlots.map((time) => {
                 const active = time === selectedTime;
+                const past = isTimePast(time);
+                const taken = !past && isTimeTaken(time);
+                const disabled = past || taken;
                 return (
                   <TouchableOpacity
                     key={time}
-                    style={[styles.timeChip, active && styles.chipActive]}
+                    disabled={disabled}
+                    style={[
+                      styles.timeChip,
+                      active && styles.chipActive,
+                      disabled && styles.timeChipDisabled,
+                    ]}
                     onPress={() => setSelectedTime(time)}
                   >
                     <Text
-                      style={[styles.chipText, active && styles.chipTextActive]}
+                      style={[
+                        styles.chipText,
+                        active && styles.chipTextActive,
+                        disabled && styles.chipTextDisabled,
+                      ]}
                     >
                       {time}
                     </Text>
+                    {disabled && (
+                      <Text style={styles.timeChipDisabledLabel}>
+                        {past ? "지난 시간" : "예약마감"}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -367,12 +452,25 @@ const styles = StyleSheet.create({
     minWidth: 64,
     alignItems: "center",
   },
+  timeChipDisabled: {
+    backgroundColor: Palette.line,
+    opacity: 0.6,
+  },
+  timeChipDisabledLabel: {
+    fontSize: 9,
+    color: Palette.inkFaint,
+    marginTop: 2,
+  },
   chipActive: {
     backgroundColor: Palette.amberSoft,
     borderWidth: 1,
     borderColor: Palette.amber,
   },
   chipText: { fontSize: 13, color: Palette.ink, fontWeight: "600" },
+  chipTextDisabled: {
+    color: Palette.inkFaint,
+    textDecorationLine: "line-through",
+  },
   chipTextActive: { color: Palette.amberDeep, fontWeight: "700" },
 
   fixedFooter: {

@@ -30,6 +30,7 @@ export type Review = {
   photos?: string[];
   keywords?: string[];
   menuName?: string;
+  reservationId?: string;
   rewardEligible?: boolean;
   ownerReply?: string;
   ownerReplyAt?: number;
@@ -106,6 +107,8 @@ function serverReviewToReview(r: ServerReview): Review {
     photos: r.photos,
     keywords: r.keywords,
     menuName: r.menuName,
+    reservationId:
+      r.reservationId != null ? String(r.reservationId) : undefined,
     rewardEligible: r.rewardEligible,
     ownerReply: r.ownerReply,
     ownerReplyAt: r.ownerReplyAt,
@@ -127,6 +130,7 @@ type ReviewContextType = {
     photos?: string[];
     keywords?: string[];
     menuName?: string;
+    reservationId?: string;
     rewardEligible?: boolean;
   }) => Promise<void>;
   removeReview: (id: string) => Promise<void>;
@@ -241,6 +245,7 @@ export const ReviewProvider = ({ children }: { children: ReactNode }) => {
     photos?: string[];
     keywords?: string[];
     menuName?: string;
+    reservationId?: string;
     rewardEligible?: boolean;
   }) => {
     if (!user) {
@@ -253,6 +258,9 @@ export const ReviewProvider = ({ children }: { children: ReactNode }) => {
       rating: review.rating,
       text: review.text,
       menuName: review.menuName,
+      reservationId: review.reservationId
+        ? Number(review.reservationId)
+        : undefined,
       keywords: review.keywords ?? [],
       photos: review.photos ?? [],
       rewardEligible: review.rewardEligible ?? false,

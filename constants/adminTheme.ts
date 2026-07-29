@@ -8,8 +8,8 @@
 
 export const AdminPalette = {
   // Base
-  charcoal: "#10161F", // 가장 깊은 배경 (헤더, 다크 섹션) — 네이비에 가까운 차콜
-  charcoalSoft: "#1A2330", // 카드/서피스용 살짝 밝은 톤
+  charcoal: "#022c14", // 가장 깊은 배경 (헤더, 다크 섹션) — 네이비에 가까운 차콜
+  charcoalSoft: "#0d3103", // 카드/서피스용 살짝 밝은 톤
   cream: "#F2F5F7", // 메인 배경 — 손님 앱의 크림 대신 쿨그레이
   creamDim: "#E4E9EE", // 보조 배경, 구분 영역
 
@@ -35,3 +35,4 @@ export const AdminPalette = {
 };
 
 export { Radius, Shadow, Spacing } from "@/constants/theme";
+

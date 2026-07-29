@@ -400,7 +400,7 @@ export default function MyPage() {
             "calendar-outline",
             "예약 내역",
             `${reservations?.length || 0}건`,
-            () => router.push("/(tabs)/reservationcheck" as any),
+            () => router.push("/recent-reservations" as any),
           )}
         </View>
 
@@ -411,7 +411,7 @@ export default function MyPage() {
             {renderMenuItem(
               {
                 icon: "calendar-outline",
-                label: "최근 예약 내역",
+                label: "예약 내역",
                 rightText:
                   reservations.length > 0 ? `${reservations.length}건` : "없음",
                 onPress: () => router.push("/recent-reservations" as any),

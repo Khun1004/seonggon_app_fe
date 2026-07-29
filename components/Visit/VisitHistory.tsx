@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/components/contexts/AuthContext";
 import { useProfile } from "@/components/contexts/ProfileContext";
 import { TOTAL_STAMPS, VisitContext } from "@/components/contexts/VisitContext";
+import { getVisitStampHistory, VisitRewardClaimRecord } from "@/constants/api";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 export default function VisitHistory() {
@@ -22,12 +23,24 @@ export default function VisitHistory() {
   const { profile } = useProfile();
   const { user } = useAuth();
   const [claiming, setClaiming] = useState(false);
+  const [claimHistory, setClaimHistory] = useState<VisitRewardClaimRecord[]>(
+    [],
+  );
+  const [expandedClaimId, setExpandedClaimId] = useState<number | null>(null);
+
+  const loadClaimHistory = () => {
+    if (!user?.loginId || !profile?.phone) return;
+    getVisitStampHistory(profile.phone, user.loginId)
+      .then(setClaimHistory)
+      .catch(() => {});
+  };
 
   // 저장된 전화번호 기준으로 확정된 예약 = 방문 도장을 서버에서 불러옵니다.
   // 로그인 정보가 있으면 내 리뷰 목록과 도장 사용 현황도 같이 불러와서,
   // 어떤 방문에 리뷰를 남겼는지 + 지금 혜택을 받을 수 있는지까지 정확히 표시해요.
   useEffect(() => {
     if (profile?.phone) refreshVisits(profile.phone, user?.loginId);
+    loadClaimHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.phone, user?.loginId]);
 
@@ -50,6 +63,7 @@ export default function VisitHistory() {
             setClaiming(true);
             try {
               await claimReward(profile.phone, user.loginId);
+              loadClaimHistory();
               Alert.alert("알림", "혜택이 사용 처리되었습니다. 맛있게 드세요!");
             } catch (e: any) {
               Alert.alert("알림", e.message || "혜택 사용에 실패했습니다.");
@@ -114,22 +128,34 @@ export default function VisitHistory() {
             </Text>
           </View>
 
-          {canClaim && (
-            <TouchableOpacity
-              style={[styles.useRewardBtn, claiming && { opacity: 0.6 }]}
-              onPress={handleUseReward}
-              disabled={claiming}
-            >
-              {claiming ? (
-                <ActivityIndicator color={Palette.white} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="gift" size={16} color={Palette.white} />
-                  <Text style={styles.useRewardBtnText}>사용하기</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[
+              styles.useRewardBtn,
+              (!canClaim || claiming) && styles.useRewardBtnDisabled,
+            ]}
+            onPress={handleUseReward}
+            disabled={!canClaim || claiming}
+          >
+            {claiming ? (
+              <ActivityIndicator color={Palette.white} size="small" />
+            ) : (
+              <>
+                <Ionicons
+                  name="gift"
+                  size={16}
+                  color={canClaim ? Palette.white : Palette.inkFaint}
+                />
+                <Text
+                  style={[
+                    styles.useRewardBtnText,
+                    !canClaim && styles.useRewardBtnTextDisabled,
+                  ]}
+                >
+                  사용하기
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         <View style={styles.noticeBox}>
@@ -143,6 +169,72 @@ export default function VisitHistory() {
             도장도 함께 사라집니다.
           </Text>
         </View>
+
+        {claimHistory.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>혜택 사용 내역</Text>
+            <View style={styles.claimHistoryCard}>
+              {claimHistory.map((claim, idx) => {
+                const isOpen = expandedClaimId === claim.id;
+                return (
+                  <View
+                    key={claim.id}
+                    style={[
+                      styles.claimRow,
+                      idx === claimHistory.length - 1 &&
+                        !isOpen && { borderBottomWidth: 0 },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.claimRowHeader}
+                      onPress={() =>
+                        setExpandedClaimId(isOpen ? null : claim.id)
+                      }
+                    >
+                      <Ionicons
+                        name="gift-outline"
+                        size={15}
+                        color={Palette.amberDeep}
+                      />
+                      <Text style={styles.claimRowText}>
+                        해물파전 서비스 사용 ·{" "}
+                        {new Date(claim.claimedAt).toLocaleString("ko-KR", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                      <Ionicons
+                        name={isOpen ? "chevron-down" : "chevron-forward"}
+                        size={16}
+                        color={Palette.inkFaint}
+                      />
+                    </TouchableOpacity>
+
+                    {isOpen && (
+                      <View style={styles.claimDetailBox}>
+                        <View style={styles.claimStampRow}>
+                          {claim.visitDates.map((date, sIdx) => (
+                            <View key={sIdx} style={styles.claimStampSlot}>
+                              <View style={styles.claimStampCircle}>
+                                <Text style={styles.claimStampGlyph}>완</Text>
+                              </View>
+                              <Text style={styles.claimStampDate}>
+                                {date.slice(5).replace("-", ".")}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* Visit history list */}
         <Text style={styles.sectionTitle}>방문 내역</Text>
@@ -308,10 +400,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     marginTop: Spacing.sm + 4,
   },
+  useRewardBtnDisabled: {
+    backgroundColor: Palette.creamDim,
+  },
   useRewardBtnText: {
     fontSize: 14,
     fontWeight: "700",
     color: Palette.white,
+  },
+  useRewardBtnTextDisabled: {
+    color: Palette.inkFaint,
   },
   noticeBox: {
     flexDirection: "row",
@@ -334,6 +432,60 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Palette.inkSoft,
     marginBottom: Spacing.sm + 4,
+  },
+  claimHistoryCard: {
+    backgroundColor: Palette.white,
+    borderRadius: Radius.lg,
+    marginBottom: Spacing.md,
+    ...Shadow.card,
+  },
+  claimRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.line,
+  },
+  claimRowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 6,
+  },
+  claimRowText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: Palette.ink,
+  },
+  claimDetailBox: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  claimStampRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm + 4,
+  },
+  claimStampSlot: {
+    alignItems: "center",
+    gap: 3,
+  },
+  claimStampCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#B23A2E",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  claimStampGlyph: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Palette.cream,
+  },
+  claimStampDate: {
+    fontSize: 9,
+    color: Palette.inkFaint,
+    fontWeight: "600",
   },
   emptyCard: {
     backgroundColor: Palette.white,

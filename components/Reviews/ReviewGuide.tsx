@@ -1,7 +1,9 @@
 // components/Reviews/ReviewGuide.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Linking,
   ScrollView,
@@ -11,53 +13,23 @@ import {
   View,
 } from "react-native";
 
+import { getReviewGuideSteps, ReviewGuideStep } from "@/constants/api";
 import { NAVER_REVIEW_URL } from "@/constants/store";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
-type GuideStep = {
-  step: number;
-  title: string;
-  description: string;
-  image: string;
-};
-
-const GUIDE_STEPS: GuideStep[] = [
-  {
-    step: 1,
-    title: "로그인하기",
-    description:
-      "방문자 리뷰는 로그인 후에만 작성할 수 있어요. 아직 회원이 아니라면 간단하게 가입 후 로그인해 주세요.",
-    image:
-      "https://images.unsplash.com/photo-1610945415295-d2bbf6a3c3e6?w=600&q=80",
-  },
-  {
-    step: 2,
-    title: "별점과 메뉴 선택하기",
-    description:
-      "별점을 선택하고, 드셨던 메뉴와 '이런 점이 좋았어요' 항목을 골라주세요. 통계에 반영됩니다.",
-    image:
-      "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&q=80",
-  },
-  {
-    step: 3,
-    title: "리뷰 작성하기",
-    description:
-      "직접 작성하거나, 선택한 키워드를 바탕으로 AI가 자연스러운 문장을 만들어주는 'AI 작성' 모드를 이용해도 좋아요.",
-    image:
-      "https://images.unsplash.com/photo-1556911220-bff31c812dba?w=600&q=80",
-  },
-  {
-    step: 4,
-    title: "사진 첨부하고 등록하기",
-    description:
-      "음식 사진을 첨부하면 '포토리뷰'로 표시돼요. 작성이 끝나면 '방문자 리뷰로 등록하기'를 눌러주세요.",
-    image:
-      "https://images.unsplash.com/photo-1556742111-a301076d9d18?w=600&q=80",
-  },
-];
-
 export default function ReviewGuide() {
   const [activeTab, setActiveTab] = useState<"video" | "text">("text");
+  const [steps, setSteps] = useState<ReviewGuideStep[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      getReviewGuideSteps()
+        .then(setSteps)
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, []),
+  );
 
   return (
     <View style={styles.container}>
@@ -103,18 +75,28 @@ export default function ReviewGuide() {
             아래 '설명' 탭에서 작성법을 확인해 주세요.
           </Text>
         </View>
+      ) : loading ? (
+        <ActivityIndicator
+          color={Palette.amberDeep}
+          style={{ marginTop: Spacing.xl }}
+        />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {GUIDE_STEPS.map((step) => (
-            <View key={step.step} style={styles.stepCard}>
-              <Image source={{ uri: step.image }} style={styles.stepImage} />
+          {steps.map((step, idx) => (
+            <View key={step.id} style={styles.stepCard}>
+              {step.imageUrl && (
+                <Image
+                  source={{ uri: step.imageUrl }}
+                  style={styles.stepImage}
+                />
+              )}
               <View style={styles.stepBody}>
                 <View style={styles.stepNumberRow}>
                   <View style={styles.stepNumberCircle}>
-                    <Text style={styles.stepNumberText}>{step.step}</Text>
+                    <Text style={styles.stepNumberText}>{idx + 1}</Text>
                   </View>
                   <Text style={styles.stepTitle}>{step.title}</Text>
                 </View>

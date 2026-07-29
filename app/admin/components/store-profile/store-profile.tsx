@@ -5,22 +5,16 @@ import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-// 화면 좌우 여백(Spacing.lg*2) + 카드 안쪽 여백(Spacing.lg*2) + 달력 카드 여백(Spacing.md*2)
-// 을 어림잡아 뺀 뒤 7일로 나눈 값이에요. 정확한 픽셀보다 "칸이 안 잘리는 것"이
-// 중요해서 넉넉하게 뺐습니다.
-const CALENDAR_CELL_SIZE = (SCREEN_WIDTH - 96) / 7;
 
 import { AdminContext } from "@/components/contexts/AdminContext";
 import {
@@ -70,6 +64,7 @@ export default function AdminStoreProfileScreen() {
     naverRating: undefined,
     naverReviewCount: undefined,
     blogReviewCount: undefined,
+    allowWeekendReservations: false,
   });
   const [closedDates, setClosedDates] = useState<AdminClosedDate[]>([]);
   const [newDate, setNewDate] = useState("");
@@ -339,6 +334,23 @@ export default function AdminStoreProfileScreen() {
             placeholderTextColor={Palette.inkFaint}
           />
 
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>주말(토/일) 예약 허용</Text>
+              <Text style={styles.switchHint}>
+                끄면 토/일요일은 손님 화면에서 회색 처리되어 전화 예약만
+                가능해요.
+              </Text>
+            </View>
+            <Switch
+              value={draft.allowWeekendReservations}
+              onValueChange={(v) =>
+                setDraft((p) => ({ ...p, allowWeekendReservations: v }))
+              }
+              trackColor={{ false: Palette.line, true: Palette.amberDeep }}
+            />
+          </View>
+
           <Text style={styles.fieldLabel}>네이버 평점 (선택)</Text>
           <TextInput
             style={styles.input}
@@ -556,6 +568,17 @@ const styles = StyleSheet.create({
     color: Palette.inkSoft,
     marginBottom: 6,
   },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  switchHint: {
+    fontSize: 11,
+    color: Palette.inkFaint,
+    lineHeight: 15,
+  },
   input: {
     backgroundColor: Palette.creamDim,
     borderRadius: Radius.md,
@@ -642,16 +665,16 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   weekdayLabel: {
-    width: CALENDAR_CELL_SIZE,
+    width: "14.28%",
     textAlign: "center",
     fontSize: 11,
     fontWeight: "700",
     color: Palette.inkFaint,
   },
   daysGrid: { flexDirection: "row", flexWrap: "wrap" },
-  dayCellEmpty: { width: CALENDAR_CELL_SIZE, height: 38 },
+  dayCellEmpty: { width: "14.28%", height: 38 },
   dayCell: {
-    width: CALENDAR_CELL_SIZE,
+    width: "14.28%",
     height: 38,
     alignItems: "center",
     justifyContent: "center",

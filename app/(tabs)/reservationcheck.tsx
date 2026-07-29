@@ -16,16 +16,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ReservationCard from "@/components/Reservation/ReservationCard";
 import { useProfile } from "@/components/contexts/ProfileContext";
 import { ReservationContext } from "@/components/contexts/ReservationContext";
-import { hasReviewed as apiHasReviewed } from "@/constants/api";
+import { ReviewContext } from "@/components/contexts/ReviewContext";
 import { Palette, Radius, Spacing } from "@/constants/theme";
 
 export default function ReservationCheck() {
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { reservations, cancelReservation, refreshReservations } =
     useContext(ReservationContext);
+  const {
+    myReviews,
+    loading: reviewsLoading,
+    refreshReviews,
+  } = useContext(ReviewContext);
   const { profile } = useProfile();
   const [now, setNow] = useState(new Date().getTime());
-  const [alreadyReviewed, setAlreadyReviewed] = useState<boolean | null>(null);
   // 마이페이지의 "취소 내역"에서 넘어오면 ?tab=cancelled로 바로 그 탭이 열려요.
   const [activeTab, setActiveTab] = useState<
     "dine_in" | "takeout" | "cancelled"
@@ -48,25 +52,28 @@ export default function ReservationCheck() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.phone]);
 
-  // 방문 완료된 예약에 "리뷰 작성하고 1,500원 적립" 버튼을 보여줄지 확인
-  useEffect(() => {
-    if (!profile?.phone) return;
-    apiHasReviewed(profile.phone)
-      .then(setAlreadyReviewed)
-      .catch(() => setAlreadyReviewed(null));
-  }, [profile?.phone]);
-
   // 이 화면으로 돌아올 때마다 최신 내역을 다시 불러옵니다 (결제/수정/취소 후 등).
   useFocusEffect(
     useCallback(() => {
-      if (!profile?.phone) return;
-      refreshReservations(profile.phone);
-      apiHasReviewed(profile.phone)
-        .then(setAlreadyReviewed)
-        .catch(() => {});
+      if (profile?.phone) refreshReservations(profile.phone);
+      refreshReviews();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile?.phone]),
   );
+
+  // "리뷰 작성 (1,500원 적립)" 버튼은, 예약 하나하나마다 그 예약으로 이미
+  // 적립 대상 리뷰를 썼는지 정확히 확인해서 보여줘요 (전화번호 전체 기준으로
+  // 뭉뚱그려서 판단하지 않아요 — 그러면 리뷰 하나만 써도 다른 예약들까지
+  // 전부 "이미 썼음"으로 잘못 표시되니까요).
+  const reviewedReservationIds = new Set(
+    myReviews
+      .filter((r) => r.rewardEligible && r.reservationId)
+      .map((r) => r.reservationId),
+  );
+  const isAlreadyReviewed = (reservationId: string): boolean | null => {
+    if (reviewsLoading) return null;
+    return reviewedReservationIds.has(reservationId);
+  };
 
   const handleCancel = (id: string) => {
     Alert.alert("예약 취소", "정말 예약을 취소하시겠습니까?", [
@@ -192,7 +199,7 @@ export default function ReservationCheck() {
               key={res.id}
               res={res}
               now={now}
-              alreadyReviewed={alreadyReviewed}
+              alreadyReviewed={isAlreadyReviewed(res.id)}
               onCancel={handleCancel}
             />
           ));

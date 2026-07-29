@@ -32,7 +32,7 @@ export type Reservation = {
   takeoutMenus: Record<string, number>;
   createdAt: number;
   status: "confirmed" | "cancelled";
-  paymentStatus: "unpaid" | "paid";
+  paymentStatus: "unpaid" | "paid" | "refunded";
   paymentMethod?: string;
   paidAmount: number;
   paidAt?: number;
@@ -73,7 +73,12 @@ function serverToLocal(r: ServerReservation): Reservation {
     takeoutMenus: r.takeoutMenus ?? {},
     createdAt: r.createdAt,
     status: r.status === "CANCELLED" ? "cancelled" : "confirmed",
-    paymentStatus: r.paymentStatus === "PAID" ? "paid" : "unpaid",
+    paymentStatus:
+      r.paymentStatus === "PAID"
+        ? "paid"
+        : r.paymentStatus === "REFUNDED"
+          ? "refunded"
+          : "unpaid",
     paymentMethod: r.paymentMethod,
     paidAmount: r.paidAmount,
     paidAt: r.paidAt,

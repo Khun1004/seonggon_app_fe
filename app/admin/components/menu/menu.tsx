@@ -1,7 +1,7 @@
 // app/admin/components/menu/menu.tsx
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
@@ -43,7 +43,8 @@ import {
 } from "@/constants/adminTheme";
 import { resolvePhotoUrl } from "@/constants/api";
 
-const CATEGORIES = ["백숙", "고기", "사이드", "음료", "주류", "추가 메뉴"];
+const FOOD_CATEGORIES = ["백숙", "고기", "사이드", "추가 메뉴"];
+const DRINK_CATEGORIES = ["음료", "주류"];
 
 const EMPTY_DRAFT: UpsertMenuItemPayload = {
   category: "백숙",
@@ -60,6 +61,8 @@ const EMPTY_DRAFT: UpsertMenuItemPayload = {
 
 export default function AdminMenu() {
   const router = useRouter();
+  const { group } = useLocalSearchParams<{ group?: string }>();
+  const CATEGORIES = group === "drinks" ? DRINK_CATEGORIES : FOOD_CATEGORIES;
   const { adminPassword } = useContext(AdminContext);
   const [menus, setMenus] = useState<AdminMenuItem[]>([]);
   const [loading, setLoading] = useState(true);

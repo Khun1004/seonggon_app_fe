@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +22,9 @@ import { ProfileContext } from "@/components/contexts/ProfileContext";
 import { ReviewContext } from "@/components/contexts/ReviewContext";
 import {
   generateAiReview,
+  getReviewGoodPointOptions,
   resolvePhotoUrl,
+  ReviewGoodPointOption,
   uploadReviewPhoto,
 } from "@/constants/api";
 import { NAVER_REVIEW_URL } from "@/constants/store";
@@ -45,19 +47,6 @@ const MOOD_KEYWORDS = [
   "깨끗해요",
 ];
 const SERVICE_KEYWORDS = ["친절해요", "응대가 빨라요", "설명을 잘 해줘요"];
-
-const GOOD_POINT_OPTIONS = [
-  { emoji: "😋", label: "음식이 맛있어요" },
-  { emoji: "💗", label: "친절해요" },
-  { emoji: "🥩", label: "고기 질이 좋아요" },
-  { emoji: "👤", label: "단체모임 하기 좋아요" },
-  { emoji: "🍚", label: "양이 많아요" },
-  { emoji: "👀", label: "매장이 넓어요" },
-  { emoji: "🅿️", label: "주차하기 편해요" },
-  { emoji: "🖼️", label: "뷰가 좋아요" },
-  { emoji: "👨‍🍳", label: "특별한 메뉴가 있어요" },
-  { emoji: "🌿", label: "건강한 맛이에요" },
-];
 
 const MENU_OPTIONS = [
   "능이오리백숙",
@@ -87,11 +76,15 @@ function maskName(name: string): string {
 
 export default function ReviewWrite() {
   const router = useRouter();
-  const { rewardEligible: rewardEligibleParam, menu: menuParam } =
-    useLocalSearchParams<{
-      rewardEligible?: string;
-      menu?: string;
-    }>();
+  const {
+    rewardEligible: rewardEligibleParam,
+    menu: menuParam,
+    reservationId: reservationIdParam,
+  } = useLocalSearchParams<{
+    rewardEligible?: string;
+    menu?: string;
+    reservationId?: string;
+  }>();
   const isRewardEligible = rewardEligibleParam === "true";
   const { addReview } = useContext(ReviewContext);
   const { profile } = useContext(ProfileContext);
@@ -103,6 +96,14 @@ export default function ReviewWrite() {
   const [foodImages, setFoodImages] = useState<string[]>([]);
 
   const [selectedGoodPoints, setSelectedGoodPoints] = useState<string[]>([]);
+  const [goodPointOptions, setGoodPointOptions] = useState<
+    ReviewGoodPointOption[]
+  >([]);
+  useEffect(() => {
+    getReviewGoodPointOptions()
+      .then(setGoodPointOptions)
+      .catch(() => {});
+  }, []);
   // 예약 내역에서 "리뷰 작성"을 눌러 넘어온 경우, 그때 드셨던(고르셨던) 메뉴가 자동으로 선택돼요.
   const [selectedMenu, setSelectedMenu] = useState<string | null>(() =>
     matchMenuOption(menuParam),
@@ -222,6 +223,7 @@ export default function ReviewWrite() {
         photos: foodImages,
         keywords: selectedGoodPoints,
         menuName: selectedMenu ?? undefined,
+        reservationId: reservationIdParam || undefined,
         rewardEligible: isRewardEligible,
       });
 
@@ -369,11 +371,11 @@ export default function ReviewWrite() {
             선택하신 항목은 '이런 점이 좋았어요' 통계에 반영됩니다.
           </Text>
           <View style={styles.goodPointChipGrid}>
-            {GOOD_POINT_OPTIONS.map((opt) => {
+            {goodPointOptions.map((opt) => {
               const isSelected = selectedGoodPoints.includes(opt.label);
               return (
                 <TouchableOpacity
-                  key={opt.label}
+                  key={opt.id}
                   style={[
                     styles.goodPointChip,
                     isSelected && styles.goodPointChipActive,

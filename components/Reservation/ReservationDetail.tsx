@@ -15,7 +15,7 @@ import {
 
 import { useProfile } from "@/components/contexts/ProfileContext";
 import { ReservationContext } from "@/components/contexts/ReservationContext";
-import { hasReviewed as apiHasReviewed } from "@/constants/api";
+import { ReviewContext } from "@/components/contexts/ReviewContext";
 import { findMenuItemById, resolveImageSource } from "@/constants/menu-data";
 import { getReservationMenuName } from "@/constants/reservation-menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
@@ -34,10 +34,14 @@ export default function ReservationDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { findReservationById, cancelReservation, refreshReservations } =
     useContext(ReservationContext);
+  const {
+    myReviews,
+    loading: reviewsLoading,
+    refreshReviews,
+  } = useContext(ReviewContext);
   const { profile } = useProfile();
 
   const [now, setNow] = useState(new Date().getTime());
-  const [alreadyReviewed, setAlreadyReviewed] = useState<boolean | null>(null);
 
   const res = findReservationById(id);
 
@@ -50,12 +54,17 @@ export default function ReservationDetail() {
     useCallback(() => {
       if (!profile?.phone) return;
       refreshReservations(profile.phone);
-      apiHasReviewed(profile.phone)
-        .then(setAlreadyReviewed)
-        .catch(() => {});
+      refreshReviews();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile?.phone]),
   );
+
+  // 이 예약으로 이미 적립 대상 리뷰를 썼는지, 예약 하나하나마다 정확히
+  // 확인해요 (전화번호 전체로 뭉뚱그리면, 다른 예약에 쓴 리뷰 때문에 이
+  // 예약도 "이미 썼음"으로 잘못 표시될 수 있어요).
+  const alreadyReviewed: boolean | null = reviewsLoading
+    ? null
+    : myReviews.some((r) => r.rewardEligible && r.reservationId === id);
 
   if (!res) {
     return (
@@ -74,11 +83,11 @@ export default function ReservationDetail() {
     res.status !== "cancelled" &&
     res.paymentStatus !== "paid";
   const menuKeys = res.menus ? Object.keys(res.menus) : [];
-  const reservationTime = new Date(`${res.date}T${res.time}:00`).getTime();
+  // 수정도 취소랑 똑같이 "예약한 지 30분 이내"까지만 가능해요.
   const canEditMenu =
+    minutesPassed <= 30 &&
     res.status !== "cancelled" &&
-    res.paymentStatus !== "paid" &&
-    reservationTime - now > 60 * 60 * 1000;
+    res.paymentStatus !== "paid";
 
   // "방문 완료"는 날짜가 아니라 실제 이용 시간이 끝났는지로 판단해요.
   // 방문 예약은 1시간 이용 시간이 끝나는 순간 바로 완료로 바뀌어서
@@ -300,7 +309,8 @@ export default function ReservationDetail() {
               color={Palette.amberDeep}
             />
             <Text style={styles.editMenuBtnText}>
-              {res.type === "takeout" ? "주문 메뉴 수정" : "예약 · 메뉴 수정"}
+              {res.type === "takeout" ? "주문 메뉴 수정" : "예약 · 메뉴 수정"} (
+              {30 - Math.floor(minutesPassed)}분 남음)
             </Text>
           </TouchableOpacity>
         )}
@@ -333,7 +343,10 @@ export default function ReservationDetail() {
               onPress={() =>
                 router.push({
                   pathname: "/review-write" as any,
-                  params: { menu: getPrimaryMenuName(res) ?? "" },
+                  params: {
+                    menu: getPrimaryMenuName(res) ?? "",
+                    reservationId: res.id,
+                  },
                 })
               }
             >
@@ -361,6 +374,7 @@ export default function ReservationDetail() {
                     params: {
                       rewardEligible: "true",
                       menu: getPrimaryMenuName(res) ?? "",
+                      reservationId: res.id,
                     },
                   })
                 }

@@ -1,7 +1,8 @@
 // components/Reservation/Reservation.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -33,6 +34,7 @@ import {
   ClosedDate,
   getReservationAvailability,
   getReservationTimeConfig,
+  getStoreProfile,
   getUpcomingClosedDates,
   TakenSlot,
 } from "@/constants/api";
@@ -210,6 +212,15 @@ export default function Reservation() {
     closedDateReasonMap[d.date] = d.reason || "휴무";
   });
 
+  // 사장님이 "주말 예약 허용"을 켜두셨는지 확인해요. 기본은 꺼짐(주말은
+  // 전화 예약만)이라, 못 불러와도 안전하게 false로 둡니다.
+  const [allowWeekend, setAllowWeekend] = useState(false);
+  useEffect(() => {
+    getStoreProfile()
+      .then((profile) => setAllowWeekend(!!profile.allowWeekendReservations))
+      .catch(() => {});
+  }, []);
+
   // 예약 가능 시간 — 매장 예약/포장을 관리자가 따로 설정한 시간표를 그대로 씁니다.
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   useEffect(() => {
@@ -219,27 +230,32 @@ export default function Reservation() {
       .catch(() => setTimeSlots([]));
   }, [orderMode]);
 
-  useEffect(() => {
+  const refreshAvailability = useCallback(() => {
     if (!selectedDate) {
       setTakenSlots([]);
       return;
     }
-    let cancelled = false;
     setLoadingAvailability(true);
     getReservationAvailability(selectedDate)
-      .then((slots) => {
-        if (!cancelled) setTakenSlots(slots);
-      })
-      .catch(() => {
-        if (!cancelled) setTakenSlots([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingAvailability(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then(setTakenSlots)
+      .catch(() => setTakenSlots([]))
+      .finally(() => setLoadingAvailability(false));
   }, [selectedDate]);
+
+  useEffect(() => {
+    refreshAvailability();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
+
+  // 화면에 다시 들어올 때마다(다른 화면 갔다 왔을 때 등) 예약 현황을 새로
+  // 불러와요 — 그 사이에 사장님이 다른 손님 예약을 수정/취소해서 자리가
+  // 새로 비거나 찼을 수 있는데, 그걸 놓치지 않도록 해줍니다.
+  useFocusEffect(
+    useCallback(() => {
+      refreshAvailability();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDate]),
+  );
 
   // 지금 고른 자리 기준으로, 이미 찬 시간인지 확인
   const isTimeTaken = (time: string) => {
@@ -453,11 +469,7 @@ export default function Reservation() {
     } catch (e: any) {
       // 자리/시간이 방금 다른 손님에게 선점된 경우 등, 서버가 마지막에 거절한 경우
       Alert.alert("예약 실패", e.message || "예약에 실패했습니다.");
-      if (selectedDate) {
-        getReservationAvailability(selectedDate)
-          .then(setTakenSlots)
-          .catch(() => {});
-      }
+      refreshAvailability();
     } finally {
       setSubmitting(false);
     }
@@ -484,7 +496,7 @@ export default function Reservation() {
   };
   const isDisabled = (year: number, month: number, day: number) =>
     isPast(year, month, day) ||
-    isWeekend(year, month, day) ||
+    (!allowWeekend && isWeekend(year, month, day)) ||
     isHoliday(year, month, day) ||
     closedDateSet.has(toDateStr(year, month, day));
 
@@ -604,12 +616,20 @@ export default function Reservation() {
             <View
               style={[styles.legendDot, { backgroundColor: Palette.error }]}
             />
-            <Text style={styles.legendText}>일/공휴일 - 전화 예약만</Text>
+            <Text style={styles.legendText}>
+              {allowWeekend
+                ? "공휴일 - 전화 예약만"
+                : "일/공휴일 - 전화 예약만"}
+            </Text>
           </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: "#2979FF" }]} />
-            <Text style={styles.legendText}>토요일 - 전화 예약만</Text>
-          </View>
+          {!allowWeekend && (
+            <View style={styles.legendItem}>
+              <View
+                style={[styles.legendDot, { backgroundColor: "#2979FF" }]}
+              />
+              <Text style={styles.legendText}>토요일 - 전화 예약만</Text>
+            </View>
+          )}
           {closedDates.length > 0 && (
             <View style={styles.legendItem}>
               <View
@@ -1687,7 +1707,7 @@ export default function Reservation() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.mainActionBtn}
-              onPress={() => {
+              onPress={async () => {
                 if (!phone.trim()) {
                   Alert.alert("알림", "전화번호를 입력해 주세요.");
                   return;
@@ -1733,7 +1753,25 @@ export default function Reservation() {
                   setSelectedTime(null);
                   return;
                 }
-                if (isTimeTaken(selectedTime)) {
+
+                // 화면에 저장된 takenSlots는 마지막으로 불러온 시점의 정보라
+                // 살짝 오래됐을 수 있어요. 다음 단계로 넘어가기 직전에 서버에서
+                // 딱 한 번 더 최신 예약 현황을 확인해서, 그 사이에 다른 손님이나
+                // 사장님이 그 자리를 채웠는지 확실하게 다시 확인합니다.
+                let latestSlots = takenSlots;
+                try {
+                  latestSlots = await getReservationAvailability(selectedDate);
+                  setTakenSlots(latestSlots);
+                } catch {
+                  // 재확인에 실패해도 기존 정보로 계속 진행 — 최종적으로는
+                  // 예약 제출 시 서버가 다시 한번 확실하게 막아줍니다.
+                }
+                const stillTaken = latestSlots.some(
+                  (slot) =>
+                    slot.roomId === selectedRoom.id &&
+                    slot.time === selectedTime,
+                );
+                if (stillTaken) {
                   Alert.alert(
                     "알림",
                     "죄송합니다, 방금 그 시간이 다른 손님에게 예약되었어요. 다른 시간을 선택해 주세요.",

@@ -39,11 +39,11 @@ export default function ReservationCard({
     minutesPassed <= 30 &&
     res.status !== "cancelled" &&
     res.paymentStatus !== "paid";
-  const reservationTime = new Date(`${res.date}T${res.time}:00`).getTime();
+  // 수정도 취소랑 똑같이 "예약한 지 30분 이내"까지만 가능해요.
   const canEditMenu =
+    minutesPassed <= 30 &&
     res.status !== "cancelled" &&
-    res.paymentStatus !== "paid" &&
-    reservationTime - now > 60 * 60 * 1000;
+    res.paymentStatus !== "paid";
 
   // "방문 완료"는 날짜만 보지 않고, 실제 이용 시간이 끝났는지로 판단해요.
   // 방문 예약은 1시간 이용 시간이 끝나는 순간 바로 "완료"로 바뀌어서
@@ -99,6 +99,11 @@ export default function ReservationCard({
                 <Text style={styles.paidBadgeText}>결제완료</Text>
               </View>
             )}
+            {res.paymentStatus === "refunded" && (
+              <View style={styles.refundedBadge}>
+                <Text style={styles.refundedBadgeText}>환불됨</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.resDate}>
             {res.date} {res.time}
@@ -131,114 +136,133 @@ export default function ReservationCard({
         </View>
       </TouchableOpacity>
 
-      {/* 상세 화면까지 안 들어가도, 자주 쓰는 버튼들은 목록에서 바로 쓸 수 있게 */}
-      <View style={styles.cardActionsWrap}>
-        {canEditMenu && (
-          <TouchableOpacity
-            style={styles.editMenuBtn}
-            onPress={() => router.push(`/reservation?editId=${res.id}` as any)}
-          >
-            <Ionicons
-              name="create-outline"
-              size={15}
-              color={Palette.amberDeep}
-            />
-            <Text style={styles.editMenuBtnText}>
-              {res.type === "takeout" ? "주문 메뉴 수정" : "예약 · 메뉴 수정"}
+      {res.status === "cancelled" && res.paymentStatus === "refunded" && (
+        <View style={styles.cardActionsWrap}>
+          <View style={styles.refundNoticeBox}>
+            <Ionicons name="cash-outline" size={16} color={Palette.amberDeep} />
+            <Text style={styles.refundNoticeText}>
+              사장님이 예약을 취소하시면서, 결제하신{" "}
+              {res.paidAmount.toLocaleString()}원이 환불 처리되었어요.
             </Text>
-          </TouchableOpacity>
-        )}
-        {res.paymentStatus === "paid" &&
-          res.status !== "cancelled" &&
-          !isPastVisit && (
+          </View>
+        </View>
+      )}
+
+      {/* 상세 화면까지 안 들어가도, 자주 쓰는 버튼들은 목록에서 바로 쓸 수 있게 */}
+      {res.status !== "cancelled" && (
+        <View style={styles.cardActionsWrap}>
+          {canEditMenu && (
+            <TouchableOpacity
+              style={styles.editMenuBtn}
+              onPress={() =>
+                router.push(`/reservation?editId=${res.id}` as any)
+              }
+            >
+              <Ionicons
+                name="create-outline"
+                size={15}
+                color={Palette.amberDeep}
+              />
+              <Text style={styles.editMenuBtnText}>
+                {res.type === "takeout" ? "주문 메뉴 수정" : "예약 · 메뉴 수정"}{" "}
+                ({30 - Math.floor(minutesPassed)}분 남음)
+              </Text>
+            </TouchableOpacity>
+          )}
+          {res.paymentStatus === "paid" && !isPastVisit && (
             <Text style={styles.paidEditHint}>
               결제가 완료되어 메뉴 수정이 어려워요. 변경을 원하시면 전화로
               문의해 주세요.
             </Text>
           )}
 
-        {res.status !== "cancelled" && !isPastVisit && (
-          <View style={styles.actionRow}>
-            {res.paymentStatus !== "paid" && (
+          {!isPastVisit && (
+            <View style={styles.actionRow}>
+              {res.paymentStatus !== "paid" && (
+                <TouchableOpacity
+                  style={styles.payBtn}
+                  onPress={() =>
+                    router.push(
+                      `/payment-checkout?reservationId=${res.id}` as any,
+                    )
+                  }
+                >
+                  <Ionicons name="card-outline" size={15} color={Palette.ink} />
+                  <Text style={styles.payBtnText}>결제하기</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={styles.payBtn}
-                onPress={() =>
-                  router.push(
-                    `/payment-checkout?reservationId=${res.id}` as any,
-                  )
-                }
-              >
-                <Ionicons name="card-outline" size={15} color={Palette.ink} />
-                <Text style={styles.payBtnText}>결제하기</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.reviewBtn}
-              onPress={() =>
-                router.push({
-                  pathname: "/review-write" as any,
-                  params: { menu: getPrimaryMenuName(res) ?? "" },
-                })
-              }
-            >
-              <Ionicons name="create-outline" size={15} color={Palette.white} />
-              <Text style={styles.reviewBtnText}>리뷰 작성</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {res.status !== "cancelled" && isPastVisit && (
-          <>
-            <View style={styles.thanksBox}>
-              <Ionicons name="heart" size={16} color={Palette.amberDeep} />
-              <Text style={styles.thanksText}>
-                방문 완료 되었습니다. 방문해 주셔서 감사드립니다.{"\n"}또 다시
-                방문해 주시면 너무 감사하겠습니다.
-              </Text>
-            </View>
-            {alreadyReviewed === false && (
-              <TouchableOpacity
-                style={styles.rewardReviewBtn}
+                style={styles.reviewBtn}
                 onPress={() =>
                   router.push({
                     pathname: "/review-write" as any,
-                    params: {
-                      rewardEligible: "true",
-                      menu: getPrimaryMenuName(res) ?? "",
-                    },
+                    params: { menu: getPrimaryMenuName(res) ?? "" },
                   })
                 }
               >
                 <Ionicons
-                  name="pricetag-outline"
+                  name="create-outline"
                   size={15}
                   color={Palette.white}
                 />
-                <Text style={styles.rewardReviewBtnText}>
-                  리뷰 작성 (1,500원 적립)
-                </Text>
+                <Text style={styles.reviewBtnText}>리뷰 작성</Text>
               </TouchableOpacity>
-            )}
-            {alreadyReviewed === false && (
-              <Text style={styles.rewardHintText}>
-                방문 후 리뷰 작성해 주시면 1,500원이 적립됩니다.{"\n"}
-                (도토리묵 · 해물파전 결제 시에만 사용 가능합니다)
-              </Text>
-            )}
-          </>
-        )}
+            </View>
+          )}
 
-        {canCancel && (
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => onCancel(res.id)}
-          >
-            <Text style={styles.cancelBtnText}>
-              예약 취소 ({30 - Math.floor(minutesPassed)}분 남음)
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          {isPastVisit && (
+            <>
+              <View style={styles.thanksBox}>
+                <Ionicons name="heart" size={16} color={Palette.amberDeep} />
+                <Text style={styles.thanksText}>
+                  방문 완료 되었습니다. 방문해 주셔서 감사드립니다.{"\n"}또 다시
+                  방문해 주시면 너무 감사하겠습니다.
+                </Text>
+              </View>
+              {alreadyReviewed === false && (
+                <TouchableOpacity
+                  style={styles.rewardReviewBtn}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/review-write" as any,
+                      params: {
+                        rewardEligible: "true",
+                        menu: getPrimaryMenuName(res) ?? "",
+                      },
+                    })
+                  }
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={15}
+                    color={Palette.white}
+                  />
+                  <Text style={styles.rewardReviewBtnText}>
+                    리뷰 작성 (1,500원 적립)
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {alreadyReviewed === false && (
+                <Text style={styles.rewardHintText}>
+                  방문 후 리뷰 작성해 주시면 1,500원이 적립됩니다.{"\n"}
+                  (도토리묵 · 해물파전 결제 시에만 사용 가능합니다)
+                </Text>
+              )}
+            </>
+          )}
+
+          {canCancel && (
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => onCancel(res.id)}
+            >
+              <Text style={styles.cancelBtnText}>
+                예약 취소 ({30 - Math.floor(minutesPassed)}분 남음)
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -329,6 +353,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: Palette.success,
+  },
+  refundedBadge: {
+    backgroundColor: "rgba(162,62,62,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+  },
+  refundedBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Palette.error,
+  },
+  refundNoticeBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: Palette.amberSoft,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+  },
+  refundNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Palette.amberDeep,
+    lineHeight: 18,
   },
   resStatus: { fontSize: 13, fontWeight: "700", color: Palette.amberDeep },
   resStatusCancelled: { color: Palette.error },
