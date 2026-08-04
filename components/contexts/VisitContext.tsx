@@ -26,6 +26,9 @@ type VisitContextType = {
   // 불러와서 도장 개수와 "이 방문에 리뷰를 썼는지"를 계산합니다.
   refreshVisits: (phone: string, loginId?: string) => Promise<void>;
   claimReward: (phone: string, loginId: string) => Promise<void>;
+  // 로그아웃 시 화면에 다른 사람의(또는 이전 계정의) 방문 도장이 계속 남아
+  // 보이지 않도록, 메모리에 들고 있는 값을 초기 상태로 비워줍니다.
+  clearVisits: () => void;
 };
 
 export const VisitContext = createContext<VisitContextType>({
@@ -35,6 +38,7 @@ export const VisitContext = createContext<VisitContextType>({
   loading: false,
   refreshVisits: async () => {},
   claimReward: async () => {},
+  clearVisits: () => {},
 });
 
 export const VisitProvider = ({ children }: { children: ReactNode }) => {
@@ -111,6 +115,12 @@ export const VisitProvider = ({ children }: { children: ReactNode }) => {
     setCanClaim(updated.canClaim);
   };
 
+  const clearVisits = () => {
+    setVisitRecords([]);
+    setVisitCount(0);
+    setCanClaim(false);
+  };
+
   return (
     <VisitContext.Provider
       value={{
@@ -120,6 +130,7 @@ export const VisitProvider = ({ children }: { children: ReactNode }) => {
         loading,
         refreshVisits,
         claimReward,
+        clearVisits,
       }}
     >
       {children}

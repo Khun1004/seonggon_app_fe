@@ -245,7 +245,7 @@ export default function RoomDetail() {
           )}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>예약 가능 시간</Text>
+            <Text style={styles.sectionTitle}>오늘 예약 가능 시간</Text>
             <Text style={styles.sectionSubText}>
               1회 이용은 1시간이며, 매장 마감은 {closeTime ?? "..."}입니다.
             </Text>

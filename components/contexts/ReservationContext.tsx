@@ -122,6 +122,9 @@ type ReservationContextType = {
     amount: number,
   ) => Promise<Reservation>;
   findReservationById: (id: string) => Reservation | undefined;
+  // 로그아웃 시 화면에 다른 사람의(또는 이전 계정의) 예약/결제내역이 계속
+  // 남아 보이지 않도록, 메모리에 들고 있는 목록을 비워줍니다.
+  clearReservations: () => void;
 };
 
 export const ReservationContext = createContext<ReservationContextType>({
@@ -139,6 +142,7 @@ export const ReservationContext = createContext<ReservationContextType>({
     throw new Error("ReservationProvider가 필요합니다.");
   },
   findReservationById: () => undefined,
+  clearReservations: () => {},
 });
 
 export const ReservationProvider = ({ children }: { children: ReactNode }) => {
@@ -201,6 +205,10 @@ export const ReservationProvider = ({ children }: { children: ReactNode }) => {
   const findReservationById = (id: string) =>
     reservations.find((r) => r.id === id);
 
+  const clearReservations = () => {
+    setReservations([]);
+  };
+
   return (
     <ReservationContext.Provider
       value={{
@@ -212,6 +220,7 @@ export const ReservationProvider = ({ children }: { children: ReactNode }) => {
         cancelReservation,
         payReservation,
         findReservationById,
+        clearReservations,
       }}
     >
       {children}

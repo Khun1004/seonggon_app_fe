@@ -38,12 +38,6 @@ export default function AdminHome() {
   const [dineInCount, setDineInCount] = useState(0);
   const [takeoutCount, setTakeoutCount] = useState(0);
 
-  // 오늘 날짜 배지에 쓰는 값들
-  const now = new Date();
-  const stampMonth = now.getMonth() + 1;
-  const stampDay = now.getDate();
-  const stampYear = now.getFullYear();
-
   useFocusEffect(
     useCallback(() => {
       if (!adminPassword) return;
@@ -183,6 +177,24 @@ export default function AdminHome() {
       sub: "여러 메뉴가 함께 쓰는 재료 목록을 관리해요",
       onPress: () => router.push("/admin/ingredient-sets" as any),
     },
+    {
+      icon: "megaphone-outline",
+      label: "공지사항 관리",
+      sub: "손님 화면의 공지사항을 추가·수정해요",
+      onPress: () => router.push("/admin/notices" as any),
+    },
+    {
+      icon: "document-text-outline",
+      label: "약관 · 개인정보 관리",
+      sub: "이용약관과 개인정보 처리방침 조항을 수정해요",
+      onPress: () => router.push("/admin/policy-sections" as any),
+    },
+    {
+      icon: "help-circle-outline",
+      label: "자주 묻는 질문 관리",
+      sub: "손님 화면의 FAQ 질문/답변을 추가·수정해요",
+      onPress: () => router.push("/admin/faq" as any),
+    },
   ];
 
   useFocusEffect(
@@ -274,9 +286,13 @@ export default function AdminHome() {
             <View style={styles.overviewStampCircle}>
               <Text style={styles.overviewStampToday}>오늘</Text>
               <Text style={styles.overviewStampDate}>
-                {stampMonth}월 {stampDay}일
+                {(() => {
+                  const d = new Date();
+                  return `${String(d.getMonth() + 1).padStart(2, "0")}.${String(
+                    d.getDate(),
+                  ).padStart(2, "0")}`;
+                })()}
               </Text>
-              <Text style={styles.overviewStampYear}>{stampYear}</Text>
             </View>
           </View>
           <View style={{ flex: 1 }}>
@@ -289,8 +305,8 @@ export default function AdminHome() {
                 style={{ alignSelf: "flex-start", marginTop: 6 }}
               />
             ) : (
-              <>
-                <Text style={styles.overviewLabel}>오늘의 예약</Text>
+              <View style={styles.overviewCountBlock}>
+                <Text style={styles.overviewCountLabel}>오늘의 예약</Text>
                 <View style={styles.overviewCountRow}>
                   <View style={styles.overviewCountItem}>
                     <Ionicons
@@ -309,7 +325,7 @@ export default function AdminHome() {
                     <Text style={styles.overviewSub}>{takeoutCount}건</Text>
                   </View>
                 </View>
-              </>
+              </View>
             )}
           </View>
           <Ionicons name="chevron-forward" size={18} color={Palette.gold} />
@@ -409,32 +425,42 @@ const styles = StyleSheet.create({
   },
   overviewStampWrap: { alignItems: "center", justifyContent: "center" },
   overviewStampCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#FFF3DC",
-    borderWidth: 1.5,
-    borderColor: "#FAC775",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Palette.gold,
     alignItems: "center",
     justifyContent: "center",
+    transform: [{ rotate: "-8deg" }],
+    shadowColor: Palette.gold,
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   overviewStampToday: {
-    fontSize: 9,
+    fontSize: 13,
     fontWeight: "800",
-    color: "#854F0B",
-    letterSpacing: 0.2,
+    color: Palette.charcoal,
   },
   overviewStampDate: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "700",
-    color: "#854F0B",
+    color: Palette.charcoal,
     marginTop: 1,
   },
-  overviewStampYear: {
-    fontSize: 7.5,
-    fontWeight: "600",
-    color: "#A9762E",
-    marginTop: 1,
+  overviewCountBlock: { marginTop: 6 },
+  overviewCountLabel: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "rgba(251,246,238,0.6)",
+    marginBottom: 3,
+  },
+  overviewStampText: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: "#B23A2E",
+    letterSpacing: 0.3,
   },
   overviewEyebrow: {
     color: Palette.gold,
@@ -448,13 +474,7 @@ const styles = StyleSheet.create({
     color: Palette.cream,
     marginTop: 2,
   },
-  overviewLabel: {
-    fontSize: 10.5,
-    fontWeight: "600",
-    color: "rgba(251,246,238,0.65)",
-    marginTop: 4,
-  },
-  overviewCountRow: { flexDirection: "row", gap: Spacing.md, marginTop: 4 },
+  overviewCountRow: { flexDirection: "row", gap: Spacing.md, marginTop: 6 },
   overviewCountItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   overviewSub: {
     fontSize: 12,

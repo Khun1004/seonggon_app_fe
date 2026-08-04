@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CartContext } from "@/components/contexts/CartContext";
 import { MenuContext } from "@/components/contexts/MenuContext";
+import { ReviewContext } from "@/components/contexts/ReviewContext";
 import { resolveImageSource } from "@/constants/menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
@@ -32,6 +33,7 @@ export default function MenuDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { findMenuItemById, extraMenu, loading, refreshMenu } =
     useContext(MenuContext);
+  const { menuRatings } = useContext(ReviewContext);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +64,22 @@ export default function MenuDetail() {
       </View>
     );
   }
+
+  // 이 메뉴 이름으로 실제 리뷰에서 계산된 평점 통계를 찾아요. "산더미
+  // 오리간장불고기 2인"처럼 인원수가 붙은 메뉴는, 리뷰에서는 "산더미
+  // 오리간장불고기"라는 통합된 이름 하나로 들어가기 때문에, 정확히 같은
+  // 이름이 없으면 서로 앞부분이 겹치는 이름도 같이 찾아서 합산해요 —
+  // 그래야 2인/3-4인 어느 쪽으로 예약해서 리뷰를 써도 두 상세 화면
+  // 모두에 반영돼요.
+  const matchingStats = menuRatings.filter(
+    (m) =>
+      m.name === item.name ||
+      item.name.startsWith(m.name) ||
+      m.name.startsWith(item.name),
+  );
+  const totalRatingSum = matchingStats.reduce((s, m) => s + m.totalRating, 0);
+  const reviewCount = matchingStats.reduce((s, m) => s + m.reviewCount, 0);
+  const avgRating = reviewCount > 0 ? totalRatingSum / reviewCount : 0;
 
   const handleShare = async () => {
     try {
@@ -140,8 +158,14 @@ export default function MenuDetail() {
           <View style={styles.reviewSection}>
             <View style={styles.ratingInfo}>
               <Ionicons name="star" size={16} color={Palette.gold} />
-              <Text style={styles.ratingText}>4.8</Text>
-              <Text style={styles.reviewCount}>(245+)</Text>
+              {reviewCount > 0 ? (
+                <>
+                  <Text style={styles.ratingText}>{avgRating.toFixed(1)}</Text>
+                  <Text style={styles.reviewCount}>({reviewCount})</Text>
+                </>
+              ) : (
+                <Text style={styles.reviewCount}>아직 리뷰가 없어요</Text>
+              )}
             </View>
             <TouchableOpacity
               style={styles.reviewBtn}

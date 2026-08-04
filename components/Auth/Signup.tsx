@@ -77,7 +77,9 @@ export default function Signup() {
   const [idChecking, setIdChecking] = useState(false);
 
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
   const [nickname, setNickname] = useState("");
 
@@ -389,14 +391,27 @@ export default function Signup() {
             )}
 
             <Text style={styles.label}>비밀번호</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="비밀번호 (6자 이상)"
-              placeholderTextColor={Palette.inkFaint}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="비밀번호 (6자 이상)"
+                placeholderTextColor={Palette.inkFaint}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword((prev) => !prev)}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={17}
+                  color={Palette.inkFaint}
+                />
+              </TouchableOpacity>
+            </View>
             {strength && (
               <View style={styles.strengthRow}>
                 <View style={styles.strengthBarTrack}>
@@ -426,14 +441,27 @@ export default function Signup() {
               </View>
             )}
 
-            <TextInput
-              style={[styles.input, { marginTop: Spacing.md }]}
-              placeholder="비밀번호 확인"
-              placeholderTextColor={Palette.inkFaint}
-              value={passwordConfirm}
-              onChangeText={setPasswordConfirm}
-              secureTextEntry
-            />
+            <View style={[styles.passwordRow, { marginTop: Spacing.md }]}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="비밀번호 확인"
+                placeholderTextColor={Palette.inkFaint}
+                value={passwordConfirm}
+                onChangeText={setPasswordConfirm}
+                secureTextEntry={!showPasswordConfirm}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPasswordConfirm((prev) => !prev)}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPasswordConfirm ? "eye-outline" : "eye-off-outline"}
+                  size={17}
+                  color={Palette.inkFaint}
+                />
+              </TouchableOpacity>
+            </View>
             {passwordConfirm.length > 0 && password !== passwordConfirm && (
               <View style={styles.inlineNotice}>
                 <Ionicons name="alert-circle" size={13} color={Palette.error} />
@@ -732,6 +760,16 @@ const styles = StyleSheet.create({
   rowWithBtn: {
     flexDirection: "row",
     gap: Spacing.sm,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Palette.creamDim,
+    borderRadius: Radius.md,
+    paddingRight: Spacing.md,
+  },
+  eyeBtn: {
+    paddingLeft: Spacing.sm,
   },
   smallBtn: {
     backgroundColor: Palette.charcoal,

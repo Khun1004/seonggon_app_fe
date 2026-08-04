@@ -61,14 +61,14 @@ export default function ReservationCheck() {
     }, [profile?.phone]),
   );
 
-  // "리뷰 작성 (1,500원 적립)" 버튼은, 예약 하나하나마다 그 예약으로 이미
-  // 적립 대상 리뷰를 썼는지 정확히 확인해서 보여줘요 (전화번호 전체 기준으로
-  // 뭉뚱그려서 판단하지 않아요 — 그러면 리뷰 하나만 써도 다른 예약들까지
-  // 전부 "이미 썼음"으로 잘못 표시되니까요).
+  // "리뷰 작성" 버튼은, 예약 하나하나마다 그 예약으로 이미 리뷰를 썼는지
+  // 정확히 확인해서 보여줘요 (전화번호 전체 기준으로 뭉뚱그려서 판단하지
+  // 않아요 — 그러면 리뷰 하나만 써도 다른 예약들까지 전부 "이미 썼음"으로
+  // 잘못 표시되니까요). 적립 대상(rewardEligible) 리뷰뿐 아니라, 일반
+  // 리뷰까지 전부 "이 예약으로 리뷰를 썼는지" 판단에 포함해야 해요 — 안
+  // 그러면 일반 리뷰로 작성한 경우 버튼이 안 사라지는 문제가 생겨요.
   const reviewedReservationIds = new Set(
-    myReviews
-      .filter((r) => r.rewardEligible && r.reservationId)
-      .map((r) => r.reservationId),
+    myReviews.filter((r) => r.reservationId).map((r) => r.reservationId),
   );
   const isAlreadyReviewed = (reservationId: string): boolean | null => {
     if (reviewsLoading) return null;

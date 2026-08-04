@@ -322,17 +322,6 @@ export default function HomeInfo() {
                 </View>
               </>
             )}
-
-            {reviewStats && reviewStats.highlightQuotes.length > 0 && (
-              <>
-                <View style={styles.divider} />
-                {reviewStats.highlightQuotes.map((q, idx) => (
-                  <Text key={idx} style={styles.reviewQuote}>
-                    "{q}"
-                  </Text>
-                ))}
-              </>
-            )}
           </View>
         </View>
 

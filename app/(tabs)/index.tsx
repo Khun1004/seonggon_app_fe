@@ -23,6 +23,7 @@ import BeforeYouVisit from "@/components/Home/BeforeYouVisit";
 import { MenuContext } from "@/components/contexts/MenuContext";
 import {
   ClosedDate,
+  getMenuPopularity,
   getNearbySpots,
   getReviewStats,
   getStoreProfile,
@@ -32,6 +33,7 @@ import {
   StoreProfile,
 } from "@/constants/api";
 import { resolveImageSource } from "@/constants/menu-data";
+import { getReservationMenuName } from "@/constants/reservation-menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -144,38 +146,58 @@ const CATEGORIES: {
   },
 ];
 
-const SALES_DATA = [
-  { name: "능이오리백숙", count: 486, color: "#EF9F27" },
-  { name: "능이닭백숙", count: 415, color: "#378ADD" },
-  { name: "오리백숙", count: 372, color: "#D85A30" },
-  { name: "산더미 오리간장불고기", count: 298, color: "#7F77DD" },
-  { name: "해물파전", count: 261, color: "#888780" },
-  { name: "유황오리로스구이", count: 224, color: "#639922" },
-  { name: "닭백숙", count: 189, color: "#1D9E75" },
-  { name: "유황오리생불고기", count: 156, color: "#D4537E" },
+// 메뉴 이름별로 순서대로 돌려가며 쓰는 색상 팔레트 — 실제 데이터는
+// 서버에서 받아오고, 색깔만 여기서 순서대로 입혀줍니다.
+const SALES_COLORS = [
+  "#EF9F27",
+  "#378ADD",
+  "#D85A30",
+  "#7F77DD",
+  "#888780",
+  "#639922",
+  "#1D9E75",
+  "#D4537E",
+  "#B23A2E",
 ];
 
-const SALES_LEGEND = [
-  { name: "능이오리백숙", color: "#EF9F27" },
-  { name: "능이닭백숙", color: "#378ADD" },
-  { name: "오리백숙", color: "#D85A30" },
-  { name: "산더미 오리간장불고기", color: "#7F77DD" },
-  { name: "해물파전", color: "#888780" },
-  { name: "유황오리로스구이", color: "#639922" },
-  { name: "닭백숙", color: "#1D9E75" },
-  { name: "유황오리생불고기", color: "#D4537E" },
+type SalesItem = { name: string; count: number; color: string };
+
+// 아직 한 번도 안 팔린 메뉴도 0개로 항상 같이 보여주기 위한 전체 메뉴
+// 이름 목록이에요 (관리자 화면의 "인기 메뉴 순위"랑 같은 목록이에요).
+const KNOWN_MENU_NAMES = [
+  "능이오리백숙",
+  "능이닭백숙",
+  "닭백숙",
+  "오리백숙",
+  "산더미 오리간장불고기",
+  "유황오리생불고기",
+  "유황오리로스구이",
+  "해물파전",
+  "도토리묵",
 ];
 
-function HorizontalBarChart() {
+// 축 눈금을 데이터에 맞게 "보기 좋은" 단위(5, 10, 25, 50, 100...)로
+// 알아서 잡아줘요. 데이터가 아직 적을 때 축이 0~500으로 텅 비어 보이는
+// 것을 막기 위함이에요.
+function computeNiceMax(maxCount: number): number {
+  if (maxCount <= 0) return 5;
+  const candidates = [5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 1000];
+  const found = candidates.find((c) => c >= maxCount);
+  return found ?? Math.ceil(maxCount / 100) * 100;
+}
+
+function HorizontalBarChart({ data }: { data: SalesItem[] }) {
   const chartWidth = SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md * 2;
   const labelWidth = 96;
   const barAreaWidth = chartWidth - labelWidth - 50;
   const barHeight = 22;
   const barGap = 18;
-  const maxValue = 500;
-  const axisSteps = [0, 100, 200, 300, 400, 500];
+  const maxValue = computeNiceMax(Math.max(...data.map((d) => d.count), 0));
+  const axisSteps = [0, 0.25, 0.5, 0.75, 1].map((f) =>
+    Math.round(maxValue * f),
+  );
 
-  const chartHeight = SALES_DATA.length * (barHeight + barGap);
+  const chartHeight = data.length * (barHeight + barGap);
 
   return (
     <View>
@@ -207,7 +229,7 @@ function HorizontalBarChart() {
         })}
 
         {/* 막대들 */}
-        {SALES_DATA.map((item, idx) => {
+        {data.map((item, idx) => {
           const y = idx * (barHeight + barGap);
           const barWidth = (item.count / maxValue) * barAreaWidth;
 
@@ -256,6 +278,7 @@ export default function HomeScreen() {
   const [profile, setProfile] = useState<StoreProfile | null>(null);
   const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const [salesData, setSalesData] = useState<SalesItem[]>([]);
   const {
     menuData,
     loading: menuLoading,
@@ -286,6 +309,30 @@ export default function HomeScreen() {
     getReviewStats()
       .then(setReviewStats)
       .catch(() => {});
+
+    // 결제까지 완료된 예약·포장 주문에서 실제로 고른 메뉴 수량을 집계해서
+    // 인기 메뉴 순위 차트로 보여줘요. 아직 한 번도 안 팔린 메뉴도 0개로
+    // 항상 다 같이 보여주고, 많이 팔린 순으로 정렬한 다음 색깔을 입혀요.
+    getMenuPopularity()
+      .then((rows) => {
+        const qtyByName = new Map<string, number>();
+        rows.forEach((r) => {
+          const name = getReservationMenuName(r.key) ?? r.key;
+          qtyByName.set(name, (qtyByName.get(name) ?? 0) + r.quantity);
+        });
+
+        const named = KNOWN_MENU_NAMES.map((name) => ({
+          name,
+          count: qtyByName.get(name) ?? 0,
+        }))
+          .sort((a, b) => b.count - a.count)
+          .map((item, idx) => ({
+            ...item,
+            color: SALES_COLORS[idx % SALES_COLORS.length],
+          }));
+        setSalesData(named);
+      })
+      .catch(() => setSalesData([]));
 
     refreshMenu();
   }, [refreshMenu]);
@@ -615,22 +662,36 @@ export default function HomeScreen() {
           <Text style={styles.sectionEyebrow}>BEST SELLER</Text>
           <Text style={styles.sectionTitle}>인기 메뉴 순위</Text>
 
-          {/* Legend */}
-          <View style={styles.legendGrid}>
-            {SALES_LEGEND.map((item) => (
-              <View key={item.name} style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: item.color }]}
-                />
-                <Text style={styles.legendText}>{item.name}</Text>
+          {salesData.length === 0 ? (
+            <View style={styles.chartWrapper}>
+              <Text style={styles.emptyRecommendText}>
+                아직 결제 완료된 주문이 없어요.{"\n"}주문이 쌓이면 실제 인기
+                메뉴 순위가 여기에 나와요.
+              </Text>
+            </View>
+          ) : (
+            <>
+              {/* Legend */}
+              <View style={styles.legendGrid}>
+                {salesData.map((item) => (
+                  <View key={item.name} style={styles.legendItem}>
+                    <View
+                      style={[
+                        styles.legendDot,
+                        { backgroundColor: item.color },
+                      ]}
+                    />
+                    <Text style={styles.legendText}>{item.name}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
 
-          {/* Chart */}
-          <View style={styles.chartWrapper}>
-            <HorizontalBarChart />
-          </View>
+              {/* Chart */}
+              <View style={styles.chartWrapper}>
+                <HorizontalBarChart data={salesData} />
+              </View>
+            </>
+          )}
         </View>
 
         {/* Nearby attractions */}

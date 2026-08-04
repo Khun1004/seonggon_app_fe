@@ -28,6 +28,7 @@ export default function Login() {
   const [loginId, setLoginId] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const canSubmit =
@@ -164,8 +165,18 @@ export default function Login() {
                   placeholderTextColor={Palette.inkFaint}
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-outline" : "eye-off-outline"}
+                    size={17}
+                    color={Palette.inkFaint}
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 

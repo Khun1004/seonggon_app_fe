@@ -40,6 +40,8 @@ type NotificationContextType = {
   refreshNotifications: (loginId: string) => Promise<void>;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: (loginId: string) => Promise<void>;
+  // 로그아웃 시 이전 계정의 알림이 화면에 남아있지 않도록 비워줍니다.
+  clearNotifications: () => void;
 };
 
 export const NotificationContext = createContext<NotificationContextType>({
@@ -49,6 +51,7 @@ export const NotificationContext = createContext<NotificationContextType>({
   refreshNotifications: async () => {},
   markAsRead: async () => {},
   markAllAsRead: async () => {},
+  clearNotifications: () => {},
 });
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
@@ -96,6 +99,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const clearNotifications = () => {
+    setNotifications([]);
+    setUnreadCount(0);
+  };
+
   return (
     <NotificationContext.Provider
       value={{
@@ -105,6 +113,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         refreshNotifications,
         markAsRead,
         markAllAsRead,
+        clearNotifications,
       }}
     >
       {children}

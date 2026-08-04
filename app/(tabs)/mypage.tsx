@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { NotificationContext } from "@/components/contexts/NotificationContext";
 import { ReservationContext } from "@/components/contexts/ReservationContext";
 import { ReviewContext } from "@/components/contexts/ReviewContext";
 import {
@@ -45,10 +46,12 @@ export default function MyPage() {
   const router = useRouter();
   const { user, signOut, updateAvatarLocal } = useAuth();
   const { cartItems } = useContext(CartContext);
-  const { reservations, refreshReservations } = useContext(ReservationContext);
+  const { reservations, refreshReservations, clearReservations } =
+    useContext(ReservationContext);
   const { myReviews, refreshReviews } = useContext(ReviewContext);
-  const { visitCount, refreshVisits } = useContext(VisitContext);
-  const { profile, saveAvatar, clearAvatar } = useProfile();
+  const { visitCount, refreshVisits, clearVisits } = useContext(VisitContext);
+  const { clearNotifications } = useContext(NotificationContext);
+  const { profile, saveAvatar, clearProfile } = useProfile();
   const [rewardSummary, setRewardSummary] = useState<RewardSummary | null>(
     null,
   );
@@ -191,8 +194,16 @@ export default function MyPage() {
         text: "로그아웃",
         style: "destructive",
         onPress: async () => {
+          // 로그인 정보를 지우는 것과 별개로, 이 기기에 남아있던 전화번호
+          // 기준 데이터(예약/방문도장/알림)도 화면에서 완전히 비워줍니다.
+          // clearProfile()로 전화번호까지 지워야, 마이페이지로 돌아왔을 때
+          // 예전 전화번호로 다시 불러와지는 걸 막을 수 있어요.
           await signOut();
-          await clearAvatar();
+          await clearProfile();
+          clearReservations();
+          clearVisits();
+          clearNotifications();
+          setRewardSummary(null);
         },
       },
     ]);

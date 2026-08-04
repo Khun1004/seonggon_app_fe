@@ -13,6 +13,7 @@ import {
   getMyReviews as apiGetMyReviews,
   CreateReviewPayload,
   getAllReviews,
+  MenuRatingItem,
   ServerReview,
 } from "@/constants/api";
 import { useAuth } from "./AuthContext";
@@ -21,7 +22,7 @@ export type Review = {
   id: string;
   name: string;
   avatarUrl?: string;
-  rating: number;
+  rating: number; // 메뉴별 별점의 평균
   date: string;
   createdAtRaw: string;
   text: string;
@@ -29,7 +30,7 @@ export type Review = {
   likes: number;
   photos?: string[];
   keywords?: string[];
-  menuName?: string;
+  menuRatings: MenuRatingItem[]; // 메뉴 하나당 별점 하나씩
   reservationId?: string;
   rewardEligible?: boolean;
   ownerReply?: string;
@@ -76,15 +77,9 @@ const BASELINE_GOOD_POINTS: GoodPointStat[] = [
   { emoji: "🌿", label: "건강한 맛이에요", count: 392 },
 ];
 
-// 대표 메뉴별 평점 베이스라인
-const BASELINE_MENU_RATINGS: MenuRatingStat[] = [
-  { name: "능이오리백숙", totalRating: 5 * 412, reviewCount: 412 },
-  { name: "산더미 오리간장불고기", totalRating: 4.5 * 318, reviewCount: 318 },
-  { name: "능이닭백숙", totalRating: 4.5 * 256, reviewCount: 256 },
-  { name: "유황오리생불고기", totalRating: 4 * 201, reviewCount: 201 },
-  { name: "유황오리로스구이", totalRating: 4 * 178, reviewCount: 178 },
-  { name: "해물파전", totalRating: 4.5 * 134, reviewCount: 134 },
-];
+// 메뉴별 평점은 가짜 시작 숫자를 안 섞어요 — 실제로 작성된 리뷰만 그대로
+// 반영하도록, 빈 상태에서 시작해서 실제 리뷰가 쌓이는 대로만 계산합니다.
+const BASELINE_MENU_RATINGS: MenuRatingStat[] = [];
 
 function serverReviewToReview(r: ServerReview): Review {
   return {
@@ -101,12 +96,12 @@ function serverReviewToReview(r: ServerReview): Review {
     text: r.text,
     options: [
       r.photos.length > 0 ? "포토리뷰" : "일반리뷰",
-      ...(r.menuName ? [r.menuName] : []),
+      ...r.menuRatings.map((m) => m.menuName),
     ].filter(Boolean),
     likes: r.likes,
     photos: r.photos,
     keywords: r.keywords,
-    menuName: r.menuName,
+    menuRatings: r.menuRatings,
     reservationId:
       r.reservationId != null ? String(r.reservationId) : undefined,
     rewardEligible: r.rewardEligible,
@@ -122,14 +117,13 @@ type ReviewContextType = {
   addReview: (review: {
     id: string;
     name: string;
-    rating: number;
     date: string;
     text: string;
     options: string[];
     likes: number;
     photos?: string[];
     keywords?: string[];
-    menuName?: string;
+    menuRatings: MenuRatingItem[];
     reservationId?: string;
     rewardEligible?: boolean;
   }) => Promise<void>;
@@ -171,24 +165,20 @@ export const ReviewProvider = ({ children }: { children: ReactNode }) => {
     const menuMap = new Map<
       string,
       { totalRating: number; reviewCount: number }
-    >(
-      BASELINE_MENU_RATINGS.map((m) => [
-        m.name,
-        { totalRating: m.totalRating, reviewCount: m.reviewCount },
-      ]),
-    );
+    >();
 
     for (const r of serverReviews) {
       for (const kw of r.keywords ?? []) {
         goodPointMap.set(kw, (goodPointMap.get(kw) ?? 0) + 1);
       }
-      if (r.menuName) {
-        const existing = menuMap.get(r.menuName) ?? {
+      // 리뷰 하나에 메뉴가 여러 개 있으면 전부 각각 통계에 반영해요.
+      for (const m of r.menuRatings ?? []) {
+        const existing = menuMap.get(m.menuName) ?? {
           totalRating: 0,
           reviewCount: 0,
         };
-        menuMap.set(r.menuName, {
-          totalRating: existing.totalRating + r.rating,
+        menuMap.set(m.menuName, {
+          totalRating: existing.totalRating + m.rating,
           reviewCount: existing.reviewCount + 1,
         });
       }
@@ -237,14 +227,13 @@ export const ReviewProvider = ({ children }: { children: ReactNode }) => {
   const addReview = async (review: {
     id: string;
     name: string;
-    rating: number;
     date: string;
     text: string;
     options: string[];
     likes: number;
     photos?: string[];
     keywords?: string[];
-    menuName?: string;
+    menuRatings: MenuRatingItem[];
     reservationId?: string;
     rewardEligible?: boolean;
   }) => {
@@ -255,9 +244,8 @@ export const ReviewProvider = ({ children }: { children: ReactNode }) => {
     const payload: CreateReviewPayload = {
       loginId: user.loginId,
       displayName: review.name,
-      rating: review.rating,
       text: review.text,
-      menuName: review.menuName,
+      menuRatings: review.menuRatings,
       reservationId: review.reservationId
         ? Number(review.reservationId)
         : undefined,

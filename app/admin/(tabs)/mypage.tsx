@@ -47,28 +47,16 @@ export default function AdminMyPage() {
 
   const settingItems: SettingItem[] = [
     {
-      icon: "information-circle-outline",
-      label: "가게 정보 관리",
-      sub: "소개·영업시간·주차 등 안내 문구 수정",
-      onPress: () => router.push("/admin/info" as any),
+      icon: "person-circle-outline",
+      label: "사장님 정보",
+      sub: "전화번호·주소·정산 계좌 정보 관리",
+      onPress: () => router.push("/admin/account" as any),
     },
     {
-      icon: "grid-outline",
-      label: "좌석 관리",
-      sub: "1층·2층 좌석/룸 추가·수정",
-      onPress: () => router.push("/admin/seats" as any),
-    },
-    {
-      icon: "restaurant-outline",
-      label: "메뉴 관리",
-      sub: "메뉴 이름·가격·사진 수정",
-      onPress: () => router.push("/admin/menu" as any),
-    },
-    {
-      icon: "stats-chart-outline",
-      label: "매출 분석",
-      sub: "일·주·월·년 매출 비교",
-      onPress: () => router.push("/admin/revenue" as any),
+      icon: "people-outline",
+      label: "사용자 정보",
+      sub: "회원 · 미등록 손님 목록 확인",
+      onPress: () => router.push("/admin/user-info" as any),
     },
   ];
 
@@ -99,7 +87,7 @@ export default function AdminMyPage() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>가게 설정</Text>
+        <Text style={styles.sectionTitle}>계정 설정</Text>
         {settingItems.map((item) => (
           <TouchableOpacity
             key={item.label}

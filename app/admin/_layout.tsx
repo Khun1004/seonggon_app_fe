@@ -117,6 +117,78 @@ export default function AdminLayout() {
         }}
       />
       <Stack.Screen
+        name="notices"
+        options={{
+          headerShown: true,
+          title: "공지사항 관리",
+          headerStyle: { backgroundColor: AdminPalette.charcoal },
+          headerTintColor: AdminPalette.cream,
+          headerTitleStyle: { fontWeight: "700" },
+          headerBackTitle: "",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="policy-sections"
+        options={{
+          headerShown: true,
+          title: "약관 · 개인정보 관리",
+          headerStyle: { backgroundColor: AdminPalette.charcoal },
+          headerTintColor: AdminPalette.cream,
+          headerTitleStyle: { fontWeight: "700" },
+          headerBackTitle: "",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="faq"
+        options={{
+          headerShown: true,
+          title: "자주 묻는 질문 관리",
+          headerStyle: { backgroundColor: AdminPalette.charcoal },
+          headerTintColor: AdminPalette.cream,
+          headerTitleStyle: { fontWeight: "700" },
+          headerBackTitle: "",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="account"
+        options={{
+          headerShown: true,
+          title: "사장님 정보",
+          headerStyle: { backgroundColor: AdminPalette.charcoal },
+          headerTintColor: AdminPalette.cream,
+          headerTitleStyle: { fontWeight: "700" },
+          headerBackTitle: "",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="user-info"
+        options={{
+          headerShown: true,
+          title: "사용자 정보",
+          headerStyle: { backgroundColor: AdminPalette.charcoal },
+          headerTintColor: AdminPalette.cream,
+          headerTitleStyle: { fontWeight: "700" },
+          headerBackTitle: "",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="user-detail"
+        options={{
+          headerShown: true,
+          title: "사용자 상세",
+          headerStyle: { backgroundColor: AdminPalette.charcoal },
+          headerTintColor: AdminPalette.cream,
+          headerTitleStyle: { fontWeight: "700" },
+          headerBackTitle: "",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
         name="coupons"
         options={{
           headerShown: true,

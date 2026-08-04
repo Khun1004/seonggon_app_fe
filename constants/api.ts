@@ -7,6 +7,8 @@
 // 그 상태로 APK를 만들면 다른 사람 휴대폰에서는 로그인/예약이 전부 실패해요.
 export const BASE_URL = "http://192.168.1.101:8080";
 
+// export const BASE_URL ="https://inquire-search-being-executive.trycloudflare.com";
+
 // 리뷰 사진 등 서버에 저장된 URL을 화면에 보여줄 때 항상 이 함수를 거쳐주세요.
 // 예전 버그로 인해 DB에 휴대폰 로컬 경로(file://, ph://, content:// 등)가 남아있는
 // 리뷰가 있을 수 있는데, 그런 값을 그대로 Image에 넘기면 앱이 깨지기 때문에
@@ -228,36 +230,6 @@ export async function getBlogReviews(
     throw new Error(data.message || "블로그 리뷰를 가져오지 못했습니다.");
   return data as BlogReviewItem[];
 }
-
-// ── 방문자 리뷰 (서버 DB 저장) ───────────────────────
-export type ServerReview = {
-  id: number;
-  displayName: string;
-  avatarUrl?: string;
-  rating: number;
-  text: string;
-  menuName?: string;
-  reservationId?: number; // ← 이 줄 추가
-  keywords: string[];
-  photos: string[];
-  likes: number;
-  rewardEligible: boolean;
-  ownerReply?: string;
-  ownerReplyAt?: number;
-  createdAt: string;
-};
-
-export type CreateReviewPayload = {
-  loginId: string;
-  displayName: string;
-  rating: number;
-  text: string;
-  menuName?: string;
-  reservationId?: number; // ← 이 줄 추가
-  keywords?: string[];
-  photos?: string[];
-  rewardEligible?: boolean;
-};
 
 export async function createReview(
   payload: CreateReviewPayload,
@@ -798,3 +770,96 @@ export async function getRewardRedeemableItems(): Promise<
   if (!res.ok) throw new Error("교환 가능 메뉴를 불러오지 못했습니다.");
   return (await res.json()) as RewardRedeemableItem[];
 }
+
+// ── 공지사항 ────────────
+export type Notice = {
+  id: number;
+  date: string;
+  title: string;
+  content: string;
+  active: boolean;
+};
+
+export async function getNotices(): Promise<Notice[]> {
+  const res = await fetch(`${BASE_URL}/api/notices`);
+  if (!res.ok) throw new Error("공지사항을 불러오지 못했습니다.");
+  return (await res.json()) as Notice[];
+}
+
+// ── 이용약관 / 개인정보 처리방침 ────────────
+export type PolicySection = {
+  id: number;
+  policyType: string;
+  heading: string;
+  body: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getPolicySections(
+  type: "terms" | "privacy",
+): Promise<PolicySection[]> {
+  const res = await fetch(`${BASE_URL}/api/policy-sections/${type}`);
+  if (!res.ok) throw new Error("내용을 불러오지 못했습니다.");
+  return (await res.json()) as PolicySection[];
+}
+
+export type FaqItem = {
+  id: number;
+  category: string;
+  categoryIcon: string;
+  question: string;
+  answer: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getFaqItems(): Promise<FaqItem[]> {
+  const res = await fetch(`${BASE_URL}/api/faq`);
+  if (!res.ok) throw new Error("자주 묻는 질문을 불러오지 못했습니다.");
+  return (await res.json()) as FaqItem[];
+}
+
+export type MenuPopularityRow = {
+  key: string;
+  quantity: number;
+};
+
+export async function getMenuPopularity(): Promise<MenuPopularityRow[]> {
+  const res = await fetch(`${BASE_URL}/api/menu-popularity`);
+  if (!res.ok) throw new Error("인기 메뉴 순위를 불러오지 못했습니다.");
+  return (await res.json()) as MenuPopularityRow[];
+}
+
+export type MenuRatingItem = {
+  menuName: string;
+  rating: number;
+};
+
+export type ServerReview = {
+  id: number;
+  displayName: string;
+  avatarUrl?: string;
+  rating: number; // 메뉴별 별점의 평균 — 서버가 계산해서 내려줍니다.
+  text: string;
+  menuRatings: MenuRatingItem[]; // 메뉴 하나당 별점 하나씩, 여러 개 가능
+  reservationId?: number;
+  keywords: string[];
+  photos: string[];
+  likes: number;
+  rewardEligible: boolean;
+  ownerReply?: string;
+  ownerReplyAt?: number;
+  createdAt: string;
+};
+
+export type CreateReviewPayload = {
+  loginId: string;
+  displayName: string;
+  text: string;
+  menuRatings: MenuRatingItem[]; // 최소 1개 이상 있어야 해요.
+  reservationId?: number;
+  keywords: string[];
+  photos: string[];
+  rewardEligible: boolean;
+};

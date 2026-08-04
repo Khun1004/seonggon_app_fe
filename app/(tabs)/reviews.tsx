@@ -540,22 +540,30 @@ export default function Reviews() {
               </Text>
 
               <View style={{ marginTop: Spacing.md }}>
-                {computedMenuRatings.map((menu) => (
-                  <View key={menu.name} style={styles.menuRatingRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.menuRatingName}>{menu.name}</Text>
-                      <Text style={styles.menuRatingCount}>
-                        리뷰 {menu.reviewCount}개
-                      </Text>
-                    </View>
-                    <View style={styles.menuRatingScoreBox}>
-                      <StarRow rating={menu.rating} size={14} />
-                      <Text style={styles.menuRatingScoreText}>
-                        {menu.rating.toFixed(1)}
-                      </Text>
-                    </View>
+                {computedMenuRatings.length === 0 ? (
+                  <View style={styles.menuRatingEmptyBox}>
+                    <Text style={styles.menuRatingEmptyText}>
+                      아직 메뉴별 리뷰가 없어요. 첫 리뷰를 남겨보세요!
+                    </Text>
                   </View>
-                ))}
+                ) : (
+                  computedMenuRatings.map((menu) => (
+                    <View key={menu.name} style={styles.menuRatingRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.menuRatingName}>{menu.name}</Text>
+                        <Text style={styles.menuRatingCount}>
+                          리뷰 {menu.reviewCount}개
+                        </Text>
+                      </View>
+                      <View style={styles.menuRatingScoreBox}>
+                        <StarRow rating={menu.rating} size={14} />
+                        <Text style={styles.menuRatingScoreText}>
+                          {menu.rating.toFixed(1)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
               </View>
             </View>
           )}
@@ -907,6 +915,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: Palette.amberDeep,
+  },
+  menuRatingEmptyBox: {
+    paddingVertical: Spacing.lg,
+    alignItems: "center",
+  },
+  menuRatingEmptyText: {
+    fontSize: 13,
+    color: Palette.inkFaint,
   },
 
   tabContainer: {

@@ -5,29 +5,6 @@ import { BASE_URL } from "@/constants/api";
 // 헤더로 함께 보내서 인증합니다 (복잡한 로그인 세션 없이, 사장님 한 분만
 // 쓰는 화면이라 단순하게 만들었어요).
 
-export async function adminLogin(password: string): Promise<boolean> {
-  let res: Response;
-  try {
-    res = await fetch(`${BASE_URL}/api/admin/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-  } catch (networkError: any) {
-    // fetch 자체가 실패한 경우 (서버에 연결도 못 한 경우) — BASE_URL이나
-    // 네트워크 연결 문제일 가능성이 높아서, 원인을 그대로 알려줍니다.
-    throw new Error(
-      `서버에 연결하지 못했습니다 (${BASE_URL}): ${networkError?.message ?? networkError}`,
-    );
-  }
-  if (res.status === 401) return false;
-  if (!res.ok) {
-    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
-    throw new Error(`로그인 요청 실패 (status ${res.status}) ${bodyText}`);
-  }
-  return true;
-}
-
 export type AdminReservation = {
   id: number;
   roomId: string;
@@ -36,6 +13,7 @@ export type AdminReservation = {
   date: string;
   time: string;
   name: string;
+  loginId?: string;
   phone: string;
   peopleCount: number;
   message?: string;
@@ -840,4 +818,329 @@ export async function uploadRewardItemPhoto(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || "사진 업로드에 실패했습니다.");
   return data.url as string;
+}
+
+// ── 공지사항 관리 ────────────
+export type AdminNotice = {
+  id: number;
+  date: string;
+  title: string;
+  content: string;
+  active: boolean;
+};
+
+export type UpsertNoticePayload = {
+  date?: string;
+  title: string;
+  content: string;
+  active: boolean;
+};
+
+export async function getAdminNotices(
+  adminPassword: string,
+): Promise<AdminNotice[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/notices`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("공지사항을 불러오지 못했습니다.");
+  return (await res.json()) as AdminNotice[];
+}
+
+export async function createAdminNotice(
+  payload: UpsertNoticePayload,
+  adminPassword: string,
+): Promise<AdminNotice> {
+  const res = await fetch(`${BASE_URL}/api/admin/notices`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminNotice;
+}
+
+export async function updateAdminNotice(
+  id: number,
+  payload: UpsertNoticePayload,
+  adminPassword: string,
+): Promise<AdminNotice> {
+  const res = await fetch(`${BASE_URL}/api/admin/notices/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminNotice;
+}
+
+export async function deleteAdminNotice(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/notices/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+// ── 약관/개인정보 조항 관리 ────────────
+export type AdminPolicySection = {
+  id: number;
+  policyType: string;
+  heading: string;
+  body: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertPolicySectionPayload = {
+  policyType: string;
+  heading: string;
+  body: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminPolicySections(
+  adminPassword: string,
+): Promise<AdminPolicySection[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/policy-sections`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("내용을 불러오지 못했습니다.");
+  return (await res.json()) as AdminPolicySection[];
+}
+
+export async function createAdminPolicySection(
+  payload: UpsertPolicySectionPayload,
+  adminPassword: string,
+): Promise<AdminPolicySection> {
+  const res = await fetch(`${BASE_URL}/api/admin/policy-sections`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminPolicySection;
+}
+
+export async function updateAdminPolicySection(
+  id: number,
+  payload: UpsertPolicySectionPayload,
+  adminPassword: string,
+): Promise<AdminPolicySection> {
+  const res = await fetch(`${BASE_URL}/api/admin/policy-sections/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminPolicySection;
+}
+
+export async function deleteAdminPolicySection(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/policy-sections/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+export type AdminFaqItem = {
+  id: number;
+  category: string;
+  categoryIcon: string;
+  question: string;
+  answer: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type UpsertFaqItemPayload = {
+  category: string;
+  categoryIcon: string;
+  question: string;
+  answer: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export async function getAdminFaqItems(
+  adminPassword: string,
+): Promise<AdminFaqItem[]> {
+  const res = await fetch(`${BASE_URL}/api/admin/faq`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("항목을 불러오지 못했습니다.");
+  return (await res.json()) as AdminFaqItem[];
+}
+
+export async function createAdminFaqItem(
+  payload: UpsertFaqItemPayload,
+  adminPassword: string,
+): Promise<AdminFaqItem> {
+  const res = await fetch(`${BASE_URL}/api/admin/faq`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("등록에 실패했습니다.");
+  return (await res.json()) as AdminFaqItem;
+}
+
+export async function updateAdminFaqItem(
+  id: number,
+  payload: UpsertFaqItemPayload,
+  adminPassword: string,
+): Promise<AdminFaqItem> {
+  const res = await fetch(`${BASE_URL}/api/admin/faq/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("수정에 실패했습니다.");
+  return (await res.json()) as AdminFaqItem;
+}
+
+export async function deleteAdminFaqItem(
+  id: number,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/faq/${id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("삭제에 실패했습니다.");
+}
+
+export async function getPaidMenuPopularity(
+  adminPassword: string,
+): Promise<MenuPopularityRow[]> {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/reservations/paid-menu-popularity`,
+    { headers: { "X-Admin-Password": adminPassword } },
+  );
+  if (!res.ok) throw new Error("결제 메뉴 순위를 불러오지 못했습니다.");
+  return (await res.json()) as MenuPopularityRow[];
+}
+
+export async function getAdminAccount(
+  adminPassword: string,
+): Promise<AdminAccountInfo> {
+  const res = await fetch(`${BASE_URL}/api/admin/account`, {
+    headers: { "X-Admin-Password": adminPassword },
+  });
+  if (!res.ok) throw new Error("정보를 불러오지 못했습니다.");
+  return (await res.json()) as AdminAccountInfo;
+}
+
+export async function updateAdminAccount(
+  payload: UpsertAdminAccountPayload,
+  adminPassword: string,
+): Promise<AdminAccountInfo> {
+  const res = await fetch(`${BASE_URL}/api/admin/account`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("저장에 실패했습니다.");
+  return (await res.json()) as AdminAccountInfo;
+}
+
+export type AdminAccountInfo = {
+  phone?: string;
+  address?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string;
+  businessName?: string;
+  businessNumber?: string;
+  representativeName?: string;
+  businessType?: string;
+  businessCategory?: string;
+};
+
+export type UpsertAdminAccountPayload = {
+  phone: string;
+  address: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  businessName: string;
+  businessNumber: string;
+  representativeName: string;
+  businessType: string;
+  businessCategory: string;
+};
+
+// getAdminAccount / updateAdminAccount 함수는 그대로 두시고, 아래 함수만
+// 새로 맨 아래에 추가해주세요:
+
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string,
+  adminPassword: string,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/admin/account/password`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": adminPassword,
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "비밀번호 변경에 실패했습니다.");
+}
+
+export async function adminLogin(
+  businessNumber: string,
+  phone: string,
+  password: string,
+): Promise<boolean> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api/admin/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessNumber, phone, password }),
+    });
+  } catch (networkError: any) {
+    // fetch 자체가 실패한 경우 (서버에 연결도 못 한 경우) — BASE_URL이나
+    // 네트워크 연결 문제일 가능성이 높아서, 원인을 그대로 알려줍니다.
+    throw new Error(
+      `서버에 연결하지 못했습니다 (${BASE_URL}): ${networkError?.message ?? networkError}`,
+    );
+  }
+  if (res.status === 401) return false;
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "(응답 본문 없음)");
+    throw new Error(`로그인 요청 실패 (status ${res.status}) ${bodyText}`);
+  }
+  return true;
 }

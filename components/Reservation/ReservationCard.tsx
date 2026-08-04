@@ -9,14 +9,15 @@ import { getReservationMenuName } from "@/constants/reservation-menu-data";
 import { Palette, Radius, Shadow, Spacing } from "@/constants/theme";
 import { getReservationWindow } from "@/utils/reservationTimerNotifications";
 
-// 예약에서 가장 많이 고른(수량 기준) 메뉴 이름을 하나 뽑아서, 리뷰 작성 화면의
-// "어떤 메뉴를 드셨나요?"에 미리 선택되도록 넘겨줍니다.
-function getPrimaryMenuName(res: {
-  menus?: Record<string, number>;
-}): string | undefined {
-  if (!res.menus || Object.keys(res.menus).length === 0) return undefined;
-  const topId = Object.entries(res.menus).sort((a, b) => b[1] - a[1])[0]?.[0];
-  return topId ? getReservationMenuName(topId) : undefined;
+// 예약에서 고른 메뉴 이름들을 전부 모아서, 리뷰 작성 화면의 "어떤 메뉴를
+// 드셨나요?"에 미리 다 선택되도록 넘겨줍니다 (쉼표로 이어붙여서 하나의
+// 화면 이동 파라미터로 보내요 — 메뉴 이름에는 쉼표가 안 들어가니 안전해요).
+function getAllMenuNames(res: { menus?: Record<string, number> }): string {
+  if (!res.menus) return "";
+  return Object.entries(res.menus)
+    .filter(([, qty]) => qty > 0)
+    .map(([id]) => getReservationMenuName(id))
+    .join(",");
 }
 
 // 예약/포장 주문 카드 하나 — 예약 전체 내역, 최근 예약 내역, 취소 내역 화면이
@@ -177,37 +178,61 @@ export default function ReservationCard({
           )}
 
           {!isPastVisit && (
-            <View style={styles.actionRow}>
-              {res.paymentStatus !== "paid" && (
-                <TouchableOpacity
-                  style={styles.payBtn}
-                  onPress={() =>
-                    router.push(
-                      `/payment-checkout?reservationId=${res.id}` as any,
-                    )
-                  }
-                >
-                  <Ionicons name="card-outline" size={15} color={Palette.ink} />
-                  <Text style={styles.payBtnText}>결제하기</Text>
-                </TouchableOpacity>
+            <>
+              <View style={styles.actionRow}>
+                {res.paymentStatus !== "paid" && (
+                  <TouchableOpacity
+                    style={styles.payBtn}
+                    onPress={() =>
+                      router.push(
+                        `/payment-checkout?reservationId=${res.id}` as any,
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="card-outline"
+                      size={15}
+                      color={Palette.ink}
+                    />
+                    <Text style={styles.payBtnText}>결제하기</Text>
+                  </TouchableOpacity>
+                )}
+                {/* 이미 리뷰를 작성한 예약이면 이 버튼 자체를 안 보여줘요. */}
+                {alreadyReviewed !== true && (
+                  <TouchableOpacity
+                    style={styles.reviewBtn}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/review-write" as any,
+                        params: {
+                          menu: getAllMenuNames(res),
+                          reservationId: res.id,
+                        },
+                      })
+                    }
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={15}
+                      color={Palette.white}
+                    />
+                    <Text style={styles.reviewBtnText}>리뷰 작성</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {alreadyReviewed === true && (
+                <View style={styles.alreadyReviewedBox}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={14}
+                    color={Palette.inkFaint}
+                  />
+                  <Text style={styles.alreadyReviewedText}>
+                    이미 리뷰를 작성하셨어요. 감사합니다!
+                  </Text>
+                </View>
               )}
-              <TouchableOpacity
-                style={styles.reviewBtn}
-                onPress={() =>
-                  router.push({
-                    pathname: "/review-write" as any,
-                    params: { menu: getPrimaryMenuName(res) ?? "" },
-                  })
-                }
-              >
-                <Ionicons
-                  name="create-outline"
-                  size={15}
-                  color={Palette.white}
-                />
-                <Text style={styles.reviewBtnText}>리뷰 작성</Text>
-              </TouchableOpacity>
-            </View>
+            </>
           )}
 
           {isPastVisit && (
@@ -227,7 +252,8 @@ export default function ReservationCard({
                       pathname: "/review-write" as any,
                       params: {
                         rewardEligible: "true",
-                        menu: getPrimaryMenuName(res) ?? "",
+                        menu: getAllMenuNames(res),
+                        reservationId: res.id,
                       },
                     })
                   }
@@ -247,6 +273,18 @@ export default function ReservationCard({
                   방문 후 리뷰 작성해 주시면 1,500원이 적립됩니다.{"\n"}
                   (도토리묵 · 해물파전 결제 시에만 사용 가능합니다)
                 </Text>
+              )}
+              {alreadyReviewed === true && (
+                <View style={styles.alreadyReviewedBox}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={14}
+                    color={Palette.inkFaint}
+                  />
+                  <Text style={styles.alreadyReviewedText}>
+                    이미 리뷰를 작성하셨어요. 감사합니다!
+                  </Text>
+                </View>
               )}
             </>
           )}
@@ -469,6 +507,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
     lineHeight: 16,
+  },
+  alreadyReviewedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: Spacing.sm + 4,
+  },
+  alreadyReviewedText: {
+    fontSize: 12,
+    color: Palette.inkFaint,
+    fontWeight: "600",
   },
   cancelBtn: {
     backgroundColor: "hsla(0, 45%, 44%, 0.08)",

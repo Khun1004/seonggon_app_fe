@@ -5,6 +5,7 @@ import React, { useCallback, useContext, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +22,7 @@ import {
   Shadow,
   Spacing,
 } from "@/constants/adminTheme";
+import { getReservationMenuName } from "@/constants/reservation-menu-data";
 
 type PeriodType = "day" | "week" | "month" | "year";
 
@@ -91,6 +93,10 @@ export default function AdminRevenue() {
   const [reservations, setReservations] = useState<AdminReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodType, setPeriodType] = useState<PeriodType>("day");
+  const [selectedBucket, setSelectedBucket] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
 
   const load = useCallback(() => {
     if (!adminPassword) return;
@@ -150,6 +156,30 @@ export default function AdminRevenue() {
   }, [paidReservations, periodType]);
 
   const maxAmount = Math.max(...buckets.map((b) => b.amount), 1);
+
+  // 선택된 구간에서, 결제완료된 예약들이 실제로 고른 메뉴를 이름별로
+  // 합산해요 (방문 메뉴 + 포장 메뉴 다 합쳐요).
+  const selectedMenuBreakdown = useMemo(() => {
+    if (!selectedBucket) return [];
+    const qtyByName = new Map<string, number>();
+    for (const r of paidReservations) {
+      const key = periodKey(new Date(r.paidAt!), periodType);
+      if (key !== selectedBucket.key) continue;
+      const combine = (menus?: Record<string, number>) => {
+        Object.entries(menus ?? {}).forEach(([id, qty]) => {
+          const name = getReservationMenuName(id) ?? id;
+          qtyByName.set(name, (qtyByName.get(name) ?? 0) + qty);
+        });
+      };
+      combine(r.menus);
+      combine(r.takeoutMenus);
+    }
+    return Array.from(qtyByName.entries())
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity);
+  }, [selectedBucket, paidReservations, periodType]);
+
+  const MEDAL_COLORS = ["#D4AF37", "#B8B8B8", "#B2703A"];
 
   const periodNoun =
     periodType === "day"
@@ -278,15 +308,124 @@ export default function AdminRevenue() {
 
           <Text style={styles.sectionTitle}>구간별 상세</Text>
           {[...buckets].reverse().map((b) => (
-            <View key={b.key} style={styles.detailRow}>
+            <TouchableOpacity
+              key={b.key}
+              style={styles.detailRow}
+              activeOpacity={0.7}
+              onPress={() => setSelectedBucket({ key: b.key, label: b.label })}
+            >
               <Text style={styles.detailLabel}>{b.label}</Text>
-              <Text style={styles.detailAmount}>{formatWon(b.amount)}</Text>
-            </View>
+              <View style={styles.detailRightRow}>
+                <Text style={styles.detailAmount}>{formatWon(b.amount)}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={Palette.inkFaint}
+                />
+              </View>
+            </TouchableOpacity>
           ))}
 
           <View style={{ height: 100 }} />
         </ScrollView>
       )}
+
+      <Modal
+        visible={!!selectedBucket}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedBucket(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeaderRow}>
+                <View>
+                  <Text style={styles.modalEyebrow}>SOLD MENU</Text>
+                  <Text style={styles.modalTitle}>
+                    {selectedBucket?.label} 판매 메뉴
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedBucket(null)}
+                  hitSlop={10}
+                >
+                  <Ionicons name="close" size={22} color={Palette.inkFaint} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedMenuBreakdown.length === 0 ? (
+                <View style={styles.modalEmptyBox}>
+                  <Ionicons
+                    name="restaurant-outline"
+                    size={32}
+                    color={Palette.line}
+                  />
+                  <Text style={styles.modalEmptyText}>
+                    이 기간에는 결제된 메뉴가 없어요.
+                  </Text>
+                </View>
+              ) : (
+                (() => {
+                  const maxQty = Math.max(
+                    ...selectedMenuBreakdown.map((m) => m.quantity),
+                    1,
+                  );
+                  return selectedMenuBreakdown.map((item, idx) => {
+                    const isTop3 = idx < 3;
+                    const widthPct = (item.quantity / maxQty) * 100;
+                    return (
+                      <View key={item.name} style={styles.menuRow}>
+                        <View
+                          style={[
+                            styles.menuRankBadge,
+                            isTop3 && {
+                              backgroundColor: MEDAL_COLORS[idx],
+                            },
+                          ]}
+                        >
+                          {isTop3 ? (
+                            <Ionicons
+                              name="trophy"
+                              size={13}
+                              color={Palette.white}
+                            />
+                          ) : (
+                            <Text style={styles.menuRankText}>{idx + 1}</Text>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.menuRowTopLine}>
+                            <Text style={styles.menuName} numberOfLines={1}>
+                              {item.name}
+                            </Text>
+                            <Text style={styles.menuQty}>
+                              {item.quantity}개
+                            </Text>
+                          </View>
+                          <View style={styles.menuBarTrack}>
+                            <View
+                              style={[
+                                styles.menuBarFill,
+                                { width: `${Math.max(widthPct, 4)}%` },
+                                isTop3 && {
+                                  backgroundColor: MEDAL_COLORS[idx],
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  });
+                })()
+              )}
+
+              <View style={{ height: Spacing.md }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -397,4 +536,83 @@ const styles = StyleSheet.create({
   },
   detailLabel: { fontSize: 13, fontWeight: "700", color: Palette.ink },
   detailAmount: { fontSize: 13, fontWeight: "700", color: Palette.amberDeep },
+  detailRightRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: Palette.white,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    maxHeight: "80%",
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: Spacing.lg,
+  },
+  modalEyebrow: {
+    color: Palette.gold,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  modalTitle: { fontSize: 17, fontWeight: "800", color: Palette.ink },
+  modalEmptyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  modalEmptyText: { fontSize: 13, color: Palette.inkFaint },
+
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm + 4,
+    backgroundColor: Palette.creamDim,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  menuRankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuRankText: { fontSize: 13, fontWeight: "800", color: Palette.inkSoft },
+  menuRowTopLine: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  menuName: { fontSize: 14, fontWeight: "700", color: Palette.ink, flex: 1 },
+  menuQty: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Palette.amberDeep,
+    marginLeft: Spacing.sm,
+  },
+  menuBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Palette.white,
+    overflow: "hidden",
+  },
+  menuBarFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: Palette.amber,
+  },
 });

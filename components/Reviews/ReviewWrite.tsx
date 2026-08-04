@@ -23,8 +23,10 @@ import { ReviewContext } from "@/components/contexts/ReviewContext";
 import {
   generateAiReview,
   getReviewGoodPointOptions,
+  getReviewMenuOptions,
   resolvePhotoUrl,
   ReviewGoodPointOption,
+  ReviewMenuOption,
   uploadReviewPhoto,
 } from "@/constants/api";
 import { NAVER_REVIEW_URL } from "@/constants/store";
@@ -48,22 +50,19 @@ const MOOD_KEYWORDS = [
 ];
 const SERVICE_KEYWORDS = ["친절해요", "응대가 빨라요", "설명을 잘 해줘요"];
 
-const MENU_OPTIONS = [
-  "능이오리백숙",
-  "산더미 오리간장불고기",
-  "능이닭백숙",
-  "유황오리생불고기",
-  "유황오리로스구이",
-  "해물파전",
-];
+const DEFAULT_MENU_RATING = 5;
 
-// 예약에서 넘어온 메뉴 이름이 리뷰용 메뉴 목록과 정확히 안 맞을 수 있어서
-// (예: "산더미 오리간장불고기 2인" vs "산더미 오리간장불고기") 앞부분이 일치하면 매칭해줍니다.
-function matchMenuOption(name: string | undefined): string | null {
-  if (!name) return null;
-  if (MENU_OPTIONS.includes(name)) return name;
-  const found = MENU_OPTIONS.find((option) => name.startsWith(option));
-  return found ?? null;
+// 예약에서 넘어온 메뉴 이름들이 관리자가 등록한 메뉴 목록과 정확히 안 맞을
+// 수 있어서(예: "산더미 오리간장불고기 2인" vs "산더미 오리간장불고기") 앞부분이
+// 일치하면 매칭해줍니다. 공백 차이도 trim으로 없애요.
+function matchMenuOption(name: string, optionNames: string[]): string | null {
+  const trimmedName = name.trim();
+  if (!trimmedName) return null;
+  const trimmedOptions = optionNames.map((o) => o.trim());
+  const exactIdx = trimmedOptions.findIndex((o) => o === trimmedName);
+  if (exactIdx !== -1) return optionNames[exactIdx];
+  const startsIdx = trimmedOptions.findIndex((o) => trimmedName.startsWith(o));
+  return startsIdx !== -1 ? optionNames[startsIdx] : null;
 }
 
 function maskName(name: string): string {
@@ -72,6 +71,29 @@ function maskName(name: string): string {
   if (trimmed.length === 1) return trimmed;
   if (trimmed.length === 2) return `${trimmed[0]}*`;
   return `${trimmed[0]}${"*".repeat(trimmed.length - 2)}${trimmed[trimmed.length - 1]}`;
+}
+
+function MiniStarRow({
+  rating,
+  onChange,
+}: {
+  rating: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <View style={{ flexDirection: "row" }}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <TouchableOpacity key={star} onPress={() => onChange(star)} hitSlop={4}>
+          <Ionicons
+            name={star <= rating ? "star" : "star-outline"}
+            size={20}
+            color={Palette.gold}
+            style={{ marginRight: 2 }}
+          />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 }
 
 export default function ReviewWrite() {
@@ -92,7 +114,6 @@ export default function ReviewWrite() {
 
   const [writeMode, setWriteMode] = useState<WriteMode>("manual");
   const [reviewText, setReviewText] = useState("");
-  const [rating, setRating] = useState(5);
   const [foodImages, setFoodImages] = useState<string[]>([]);
 
   const [selectedGoodPoints, setSelectedGoodPoints] = useState<string[]>([]);
@@ -104,10 +125,65 @@ export default function ReviewWrite() {
       .then(setGoodPointOptions)
       .catch(() => {});
   }, []);
-  // 예약 내역에서 "리뷰 작성"을 눌러 넘어온 경우, 그때 드셨던(고르셨던) 메뉴가 자동으로 선택돼요.
-  const [selectedMenu, setSelectedMenu] = useState<string | null>(() =>
-    matchMenuOption(menuParam),
-  );
+
+  // "어떤 메뉴를 드셨나요?" 목록 — 관리자가 "리뷰 메뉴 목록 관리"에서 등록한
+  // 것을 그대로 가져와요. 이제 메뉴는 여러 개 고를 수 있고, 메뉴마다 따로
+  // 별점을 매겨요. selectedMenuRatings는 "메뉴 이름 -> 별점" 맵이에요 —
+  // 여기 들어있는 메뉴만 "선택된" 상태예요.
+  const [menuOptions, setMenuOptions] = useState<ReviewMenuOption[]>([]);
+  const [selectedMenuRatings, setSelectedMenuRatings] = useState<
+    Record<string, number>
+  >({});
+  useEffect(() => {
+    getReviewMenuOptions()
+      .then(setMenuOptions)
+      .catch(() => {});
+  }, []);
+
+  // 예약 내역에서 "리뷰 작성"을 눌러 넘어온 경우, 그때 드셨던(고르셨던)
+  // 메뉴들이 이 목록과 매칭되면 전부 자동으로 선택되고, 별점은 5점으로
+  // 기본 세팅돼요 (원하시면 각자 다시 조정하시면 돼요).
+  useEffect(() => {
+    if (!menuParam || menuOptions.length === 0) return;
+    const optionNames = menuOptions.map((o) => o.name);
+    const names = menuParam
+      .split(",")
+      .map((n) => n.trim())
+      .filter(Boolean);
+    const matched: Record<string, number> = {};
+    for (const name of names) {
+      const found = matchMenuOption(name, optionNames);
+      if (found) matched[found] = DEFAULT_MENU_RATING;
+    }
+    if (Object.keys(matched).length > 0) {
+      setSelectedMenuRatings((prev) => ({ ...matched, ...prev }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuParam, menuOptions]);
+
+  const toggleMenu = (name: string) => {
+    setSelectedMenuRatings((prev) => {
+      if (name in prev) {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      }
+      return { ...prev, [name]: DEFAULT_MENU_RATING };
+    });
+  };
+
+  const setMenuRating = (name: string, rating: number) => {
+    setSelectedMenuRatings((prev) => ({ ...prev, [name]: rating }));
+  };
+
+  const selectedMenuNames = Object.keys(selectedMenuRatings);
+  // 전체 평균 별점 — AI 작성 프롬프트에 참고용으로만 씁니다 (카드에 보일
+  // "전체 별점"은 서버가 메뉴별 별점 평균으로 알아서 계산해요).
+  const averageRating =
+    selectedMenuNames.length > 0
+      ? selectedMenuNames.reduce((sum, n) => sum + selectedMenuRatings[n], 0) /
+        selectedMenuNames.length
+      : 5;
 
   const [selectedTaste, setSelectedTaste] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
@@ -173,9 +249,9 @@ export default function ReviewWrite() {
     setAiGenerating(true);
     try {
       const text = await generateAiReview({
-        rating,
+        rating: averageRating,
         goodPoints: selectedGoodPoints,
-        menuName: selectedMenu ?? undefined,
+        menuName: selectedMenuNames.join(", ") || undefined,
         taste: selectedTaste ?? undefined,
         mood: selectedMood ?? undefined,
         service: selectedService ?? undefined,
@@ -198,6 +274,10 @@ export default function ReviewWrite() {
       ]);
       return;
     }
+    if (selectedMenuNames.length === 0) {
+      Alert.alert("알림", "드신 메뉴를 하나 이상 선택하고 별점을 매겨 주세요.");
+      return;
+    }
     if (reviewText.trim().length < 5) {
       Alert.alert("알림", "리뷰를 5자 이상 작성해 주세요.");
       return;
@@ -205,10 +285,14 @@ export default function ReviewWrite() {
 
     setSubmitting(true);
     try {
+      const menuRatings = selectedMenuNames.map((menuName) => ({
+        menuName,
+        rating: selectedMenuRatings[menuName],
+      }));
+
       await addReview({
         id: Math.random().toString(),
         name: profile?.name ? maskName(profile.name) : "고객",
-        rating,
         date: new Date().toLocaleDateString("ko-KR", {
           year: "numeric",
           month: "2-digit",
@@ -217,12 +301,12 @@ export default function ReviewWrite() {
         text: reviewText,
         options: [
           foodImages.length > 0 ? "포토리뷰" : "일반리뷰",
-          ...(selectedMenu ? [selectedMenu] : []),
+          ...selectedMenuNames,
         ],
         likes: 0,
         photos: foodImages,
         keywords: selectedGoodPoints,
-        menuName: selectedMenu ?? undefined,
+        menuRatings,
         reservationId: reservationIdParam || undefined,
         rewardEligible: isRewardEligible,
       });
@@ -252,7 +336,10 @@ export default function ReviewWrite() {
     }
   };
 
-  const canSubmit = reviewText.trim().length >= 5 && !submitting;
+  const canSubmit =
+    selectedMenuNames.length > 0 &&
+    reviewText.trim().length >= 5 &&
+    !submitting;
 
   // 아직 로그인 상태를 불러오는 중이면 잠시 대기
   if (!isLoaded) {
@@ -314,58 +401,56 @@ export default function ReviewWrite() {
           />
         </TouchableOpacity>
 
-        {/* Rating */}
+        {/* 먹은 메뉴 선택 + 메뉴별 별점 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>1. 별점 선택</Text>
-          <View style={styles.starsRow}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity key={star} onPress={() => setRating(star)}>
-                <Ionicons
-                  name={star <= rating ? "star" : "star-outline"}
-                  size={34}
-                  color={Palette.gold}
-                  style={{ marginRight: 5 }}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* 먹은 메뉴 선택 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. 어떤 메뉴를 드셨나요?</Text>
+          <Text style={styles.sectionTitle}>1. 어떤 메뉴를 드셨나요?</Text>
           <Text style={styles.sectionDesc}>
-            선택한 메뉴의 평점에 반영됩니다.
+            드신 메뉴를 여러 개 고르실 수 있어요. 메뉴마다 따로 별점을
+            매겨주세요.
           </Text>
           <View style={styles.menuChipRow}>
-            {MENU_OPTIONS.map((menu) => (
-              <TouchableOpacity
-                key={menu}
-                style={[
-                  styles.menuChip,
-                  selectedMenu === menu && styles.menuChipActive,
-                ]}
-                onPress={() =>
-                  setSelectedMenu((prev) => (prev === menu ? null : menu))
-                }
-              >
-                <Text
-                  style={[
-                    styles.menuChipText,
-                    selectedMenu === menu && styles.menuChipTextActive,
-                  ]}
+            {menuOptions.map((menu) => {
+              const isSelected = menu.name in selectedMenuRatings;
+              return (
+                <TouchableOpacity
+                  key={menu.id}
+                  style={[styles.menuChip, isSelected && styles.menuChipActive]}
+                  onPress={() => toggleMenu(menu.name)}
                 >
-                  {menu}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.menuChipText,
+                      isSelected && styles.menuChipTextActive,
+                    ]}
+                  >
+                    {menu.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+
+          {selectedMenuNames.length > 0 && (
+            <View style={styles.menuRatingList}>
+              {selectedMenuNames.map((name) => (
+                <View key={name} style={styles.menuRatingRow}>
+                  <Text style={styles.menuRatingName} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  <MiniStarRow
+                    rating={selectedMenuRatings[name]}
+                    onChange={(n) => setMenuRating(name, n)}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* 이런 점이 좋았어요 키워드 선택 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            3. 어떤 점이 좋았나요? (복수 선택)
+            2. 어떤 점이 좋았나요? (복수 선택)
           </Text>
           <Text style={styles.sectionDesc}>
             선택하신 항목은 '이런 점이 좋았어요' 통계에 반영됩니다.
@@ -399,7 +484,7 @@ export default function ReviewWrite() {
 
         {/* Write mode toggle */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>4. 리뷰 작성</Text>
+          <Text style={styles.sectionTitle}>3. 리뷰 작성</Text>
           <View style={styles.modeTabRow}>
             <TouchableOpacity
               style={[
@@ -696,11 +781,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-  starsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginVertical: Spacing.sm,
-  },
 
   menuChipRow: {
     flexDirection: "row",
@@ -726,6 +806,28 @@ const styles = StyleSheet.create({
   },
   menuChipTextActive: {
     color: Palette.cream,
+  },
+  menuRatingList: {
+    marginTop: Spacing.md,
+    backgroundColor: Palette.white,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    ...Shadow.card,
+  },
+  menuRatingRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.line,
+  },
+  menuRatingName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: Palette.ink,
+    marginRight: Spacing.sm,
   },
 
   goodPointChipGrid: {

@@ -10,7 +10,11 @@ type AdminContextType = {
   isAdmin: boolean;
   adminPassword: string | null;
   loading: boolean;
-  login: (password: string) => Promise<boolean>;
+  login: (
+    businessNumber: string,
+    phone: string,
+    password: string,
+  ) => Promise<boolean>;
   logout: () => Promise<void>;
 };
 
@@ -36,8 +40,14 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (password: string) => {
-    const ok = await apiAdminLogin(password);
+  // 로그인은 사업자등록번호 + 전화번호 + 비밀번호 3개를 다 확인해요. 성공
+  // 후에는(다른 모든 관리자 화면에서) 비밀번호만 기기에 저장해두고 계속 써요.
+  const login = async (
+    businessNumber: string,
+    phone: string,
+    password: string,
+  ) => {
+    const ok = await apiAdminLogin(businessNumber, phone, password);
     if (ok) {
       setAdminPassword(password);
       await AsyncStorage.setItem(STORAGE_KEY, password);
